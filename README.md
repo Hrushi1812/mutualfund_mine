@@ -16,6 +16,9 @@ Simple script to estimate a mutual fund's intraday NAV movement using component 
 - `fund_estimation_<timestamp>.xlsx` — generated output.
 - `mapping_fetch_debug.csv`, `unmapped_isins.csv` — (not used by this script) may appear if you use mapping helpers.
 
+## Data persistance
+- Input files are saved to a MongoDB database by the app. If no local input is provided, the script can load the latest saved holdings from the database so you don't need to re-upload daily.
+
 ## Input file format (nav4.xlsx)
 The script expects these columns (case-sensitive):
 - `ISIN` (optional but can be present)
@@ -77,5 +80,5 @@ Start-Process .\nav4.xlsx
   - Sheet `Summary` — NAV and P&L summary
 
 ## Future Implementations
-- Add SIP and per-security transaction history to support systematic flows and precise realized/unrealized P&L.
+- Add SIP along with the lumpsum
 
