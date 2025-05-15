@@ -1,83 +1,64 @@
 # MutualFundTracker
 
-Simple script to estimate a mutual fund's intraday NAV movement using component stock moves from Yahoo Finance.
+A FinTech backend system that estimates the current-day NAV (Net Asset Value) of a mutual fund in real time using live stock price data from Yahoo Finance.
+
+This solves the problem where daily NAV is announced after market close, but investors want to know their live P&L and current portfolio worth during the trading day.
 
 ## What this script does
-- Reads holdings from `nav4.xlsx` (expects columns: `ISIN`, `Name of the Instrument`, `% to NAV`, `Symbol`).
-- Fetches recent prices for each `Symbol` from Yahoo (yfinance).
-- Computes each stock's daily % change and the weighted contribution to the fund (% to NAV * daily change).
-- Estimates current NAV from user-provided previous NAV and returns a P&L summary.
-- Writes detailed output to `fund_estimation_<timestamp>.xlsx`.
-- Logs progress to console (DEBUG level).
+- Upload mutual fund holdings once using Excel
+- Holdings stored securely in MongoDB
+- Fetches live stock prices using Yahoo Finance 
+- Estimates NAV change based on portfolio weight %
+- Calculates current value & P&L of investor holdings
 
-## Files
-- `app.py` — main script (reads `nav4.xlsx`, fetches prices, writes output).
-- `nav4.xlsx` — input (you provide).
-- `fund_estimation_<timestamp>.xlsx` — generated output.
-- `mapping_fetch_debug.csv`, `unmapped_isins.csv` — (not used by this script) may appear if you use mapping helpers.
+## 🛠 Tech Stack
 
-## Data persistance
-- Input files are saved to a MongoDB database by the app. If no local input is provided, the script can load the latest saved holdings from the database so you don't need to re-upload daily.
+| Layer              | Technology |
+|--------------------|------------|
+| Backend            | FastAPI    |
+| Database           | MongoDB    |
+| Financial Data API | yfinance   |
+| Language           | Python     |
+| API Server         | Uvicorn    |
 
-## Input file format (nav4.xlsx)
-The script expects these columns (case-sensitive):
-- `ISIN` (optional but can be present)
-- `Name of the Instrument`
-- `% to NAV`
-- `Symbol`  ← required for price fetch
+## Project structure
 
-Example rows (Excel):
-| ISIN         | Name of the Instrument      | % to NAV | Symbol       |
-|--------------|-----------------------------|----------:|--------------|
-| INE040A01034 | HDFC Bank Limited           |     6.50  | HDFCBANK.NS  |
-| INE009A01021 | Infosys Limited             |     3.25  | INFY.NS      |
+project/
+├─ app.py # FastAPI backend API
+├─ nav_logic.py # NAV calculation logic
+├─ db.py # Mongo helper functions
+├─ requirements.txt # Package dependencies
+├─ .env # Environment variables
 
-If `Symbol` is missing, the script will drop that row.
+## Environmental Setup
 
-## Requirements
-- Python 3.10+ recommended
-- Required packages (install into your venv):
-  - pandas
-  - yfinance
-  - openpyxl (for Excel I/O)
-
-Install example:
+create a '.env' file:
 ```powershell
-python -m pip install pandas yfinance openpyxl
+MONGO_URI=mongodb://localhost:27017
+MONGO_DB=mutual_funds
+MONGO_COLLECTION=holdings
 ```
 
-You can also use the provided `requirements.txt` if present.
-
-## Usage
-From project root (Windows PowerShell):
-```powershell
-python .\app.py
+## Installation And Run
+```bash
+git clone <repo-url>
+cd project
+pip install -r requirements.txt
+uvicorn app:app --reload
 ```
-The script will:
-1. Print and log columns found.
-2. Ask for yesterday's NAV and your investment amount (console input).
-3. Fetch prices and compute results.
-4. Save the detailed report as an Excel file.
+## How it works
+- Reads MF holdings
+- Fetches individual stock price movement → last 2 days
+- Calculates % change for each stock
+- Multiplies change with stock’s % weight in NAV
+- Sums all weighted returns → estimated NAV change
+- Computes investor P&L instantly
 
-## Configurable items / quick edits
-- Rate limiting: current pause between Yahoo requests is `time.sleep(0.4 + random.uniform(0, 0.4))` in `app.py`. Increase base value to reduce 429s.
-- If you want mapping from ISIN → Symbol, add a mapping step (OpenFIGI or manual CSV) before running `app.py`. This script requires `Symbol` to be present.
-
-## Common issues & troubleshooting
-- "Not enough data points" or yfinance errors:
-  - Symbol may be incorrect; ensure `Symbol` matches Yahoo ticker (e.g. `HDFCBANK.NS` for NSE).
-  - Some instruments (non-equity, delisted) have no price data.
-  - Rate limits: increase sleep delay or stagger runs.
-
-- To open Excel in default app:
-```powershell
-Start-Process .\nav4.xlsx
-```
-
-## Output
-- Excel file `fund_estimation_<timestamp>.xlsx` with:
-  - Sheet `Details` — original rows plus `Daily Change (%)` and `Weighted Return`
-  - Sheet `Summary` — NAV and P&L summary
+## Challenges solved
+- Mutual fund NAV not available during market hours
+- Live price fetching rate limits handled via staggered requests
+- Persistent storage so users upload holdings only once
+- Modular architecture for future features (UI, auth, deployment)
 
 ## Future Implementations
 - Add SIP along with the lumpsum
