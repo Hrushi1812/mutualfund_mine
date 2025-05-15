@@ -24,12 +24,13 @@ This solves the problem where daily NAV is announced after market close, but inv
 ## Project structure
 
 project root
-├─ app.py                # FastAPI backend API (HTTP endpoints)
-├─ nav_logic.py          # NAV calculation and business logic
-├─ db.py                 # MongoDB helper functions (save/load holdings)
-├─ requirements.txt      # Pinned Python package versions
-├─ .env                  # Environment variables (not committed)
-├─ README.md             # Project documentation
+
+├─ app.py               
+├─ nav_logic.py          
+├─ db.py                 
+├─ requirements.txt      
+├─ .env                  
+├─ README.md          
 
 ## Environmental Setup
 
