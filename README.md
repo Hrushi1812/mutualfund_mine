@@ -11,7 +11,7 @@ This solves the problem where daily NAV is announced after market close, but inv
 - Estimates NAV change based on portfolio weight %
 - Calculates current value & P&L of investor holdings
 
-## 🛠 Tech Stack
+## Tech Stack
 
 | Layer              | Technology |
 |--------------------|------------|
@@ -23,12 +23,13 @@ This solves the problem where daily NAV is announced after market close, but inv
 
 ## Project structure
 
-project/
-├─ app.py # FastAPI backend API
-├─ nav_logic.py # NAV calculation logic
-├─ db.py # Mongo helper functions
-├─ requirements.txt # Package dependencies
-├─ .env # Environment variables
+project root
+├─ app.py                # FastAPI backend API (HTTP endpoints)
+├─ nav_logic.py          # NAV calculation and business logic
+├─ db.py                 # MongoDB helper functions (save/load holdings)
+├─ requirements.txt      # Pinned Python package versions
+├─ .env                  # Environment variables (not committed)
+├─ README.md             # Project documentation
 
 ## Environmental Setup
 
@@ -46,6 +47,18 @@ cd project
 pip install -r requirements.txt
 uvicorn app:app --reload
 ```
+
+## API usage
+Open browser (Swagger)
+```bash
+http://127.0.0.1:8000/docs
+```
+
+```bash
+POST /upload-holdings/
+POST /estimate-nav/
+```
+
 ## How it works
 - Reads MF holdings
 - Fetches individual stock price movement → last 2 days
