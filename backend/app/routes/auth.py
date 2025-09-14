@@ -46,9 +46,9 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
-    secret_key = os.getenv("JWT_SECRET")
+    secret_key = os.getenv("JWT_SECRET_KEY")
     if not secret_key:
-        raise Exception("JWT_SECRET not set")
+        raise Exception("JWT_SECRET_KEY not set")
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=30))
     to_encode.update({"exp": expire})
@@ -85,7 +85,7 @@ async def login(user: UserLogin):
 
 # Optional: Dependency to get current user from token
 async def get_current_user(token: str = Depends(oauth2_scheme)):
-    secret_key = os.getenv("JWT_SECRET")
+    secret_key = os.getenv("JWT_SECRET_KEY")
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
