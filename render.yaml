@@ -4,7 +4,22 @@ services:
     name: mutual-fund-tracker-combined
     env: python
     plan: free
-    buildCommand: chmod +x build-production.sh && ./build-production.sh
+    buildCommand: |
+      # Set Python version explicitly
+      python3.12 --version
+      # Upgrade pip to latest version
+      python3.12 -m pip install --upgrade pip
+      # Install backend dependencies with pre-compiled wheels
+      python3.12 -m pip install --only-binary=all -r backend/requirements.txt
+      # Install frontend dependencies
+      cd frontend && npm install
+      # Build frontend
+      npm run build
+      # Create backend static directory
+      mkdir -p ../backend/static
+      # Copy built files
+      cp -r dist/* ../backend/static/
+      echo "Build completed successfully!"
     startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: MONGODB_URL
