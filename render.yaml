@@ -12,9 +12,9 @@ services:
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: PYTHON_VERSION
-        value: 3.13.4
+        value: 3.12.8
       - key: NODE_VERSION
-        value: 22.16.0
+        value: 22.19.0
       - key: ENVIRONMENT
         value: production
     healthCheckPath: /
