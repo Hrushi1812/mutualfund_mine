@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { registerUser  } from "../services/api";
 
 export default function Register({ onRegisterSuccess }) {
@@ -46,6 +47,9 @@ export default function Register({ onRegisterSuccess }) {
         /><br />
         <button type="submit">Register</button>
       </form>
+      <p>
+        Already have an account? <Link to="/login">Login here</Link>
+      </p>
     </div>
   );
 }

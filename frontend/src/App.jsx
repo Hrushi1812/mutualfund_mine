@@ -1,8 +1,16 @@
 import React, { useState } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
+
+function RegisterWrapper() {
+  const navigate = useNavigate();
+  const handleRegisterSuccess = () => {
+    navigate("/login");
+  };
+  return <Register onRegisterSuccess={handleRegisterSuccess} />;
+}
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -34,7 +42,7 @@ function App() {
             isAuthenticated ? (
               <Navigate to="/" />
             ) : (
-              <Register onRegisterSuccess={() => alert("Registered! Please login.")} />
+              <RegisterWrapper />
             )
           }
         />

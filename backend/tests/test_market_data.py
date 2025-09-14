@@ -72,4 +72,15 @@ class TestMarketDataService:
         mock_response.text = """
 Scheme Code;ISIN Div Payout/ ISIN Growth;ISIN Div Reinvestment;Scheme Name;Net Asset Value;Date
 120503;INE123A01012;INE123A01013;Test Mutual Fund;45.67;15-Jan-2024
-120504;INE124A01012;INE124
+120504;INE124A01012;INE124A01013;Another Fund;50.12;15-Jan-2024
+"""
+        mock_requests_get.return_value = mock_response
+
+        service = MarketDataService()
+        nav = await service.get_nav_from_amfi("120503")
+
+        assert nav is not None
+        assert nav["scheme_code"] == "120503"
+        assert nav["scheme_name"] == "Test Mutual Fund"
+        assert nav["nav"] == 45.67
+        assert nav["date"] == "15-Jan-2024"

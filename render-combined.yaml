@@ -1,0 +1,26 @@
+services:
+  # Combined Frontend + Backend Service
+  - type: web
+    name: mutual-fund-tracker-combined
+    env: python
+    plan: free
+    buildCommand: |
+      # Install backend dependencies
+      pip install -r backend/requirements.txt
+      # Install frontend dependencies
+      cd frontend && npm install && npm run build
+      # Copy built frontend to backend static directory
+      mkdir -p backend/static
+      cp -r frontend/dist/* backend/static/
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGODB_URL
+        sync: false  # You'll set this manually in Render dashboard
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.9.18
+      - key: ENVIRONMENT
+        value: production
+    healthCheckPath: /
+    autoDeploy: true

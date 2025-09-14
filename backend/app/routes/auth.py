@@ -13,9 +13,10 @@ load_dotenv()  # load .env variables
 router = APIRouter()
 
 # MongoDB client setup
-MONGODB_URI = os.getenv("MONGODB_URI")
-client = AsyncIOMotorClient(MONGODB_URI)
-db = client.mutualfundtracker  # your DB name
+MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+DATABASE_NAME = os.getenv("DATABASE_NAME", "mutual_fund_tracker")
+client = AsyncIOMotorClient(MONGODB_URL)
+db = client[DATABASE_NAME]
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -25,6 +26,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 # Pydantic models
 class UserCreate(BaseModel):
+    name: str
     email: EmailStr
     password: str
 
@@ -64,9 +66,14 @@ async def register(user: UserCreate):
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     hashed_password = get_password_hash(user.password)
-    user_dict = {"email": user.email, "hashed_password": hashed_password}
+    user_dict = {
+        "name": user.name,
+        "email": user.email, 
+        "hashed_password": hashed_password,
+        "created_at": datetime.utcnow()
+    }
     await db.users.insert_one(user_dict)
-    return {"msg": "User  registered successfully"}
+    return {"msg": "User registered successfully"}
 
 @router.post("/login", response_model=TokenResponse)
 async def login(user: UserLogin):

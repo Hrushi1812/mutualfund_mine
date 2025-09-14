@@ -1,0 +1,29 @@
+services:
+  # Backend Service (FastAPI)
+  - type: web
+    name: mutual-fund-tracker-backend
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGODB_URL
+        sync: false  # You'll set this manually in Render dashboard
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.9.18
+    healthCheckPath: /
+    autoDeploy: true
+
+  # Frontend Service (React)
+  - type: web
+    name: mutual-fund-tracker-frontend
+    env: static
+    plan: free
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://mutual-fund-tracker-backend.onrender.com
+    autoDeploy: true
