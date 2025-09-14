@@ -4,48 +4,7 @@ services:
     name: mutual-fund-tracker-combined
     env: python
     plan: free
-    buildCommand: |
-      # Install backend dependencies
-      echo "Installing backend dependencies..."
-      pip install -r backend/requirements.txt
-      
-      # Install frontend dependencies
-      echo "Installing frontend dependencies..."
-      cd frontend
-      npm install
-      
-      # Check Node.js and npm versions
-      echo "Node.js version: $(node --version)"
-      echo "npm version: $(npm --version)"
-      
-      # Build frontend
-      echo "Building frontend..."
-      npm run build
-      
-      # Check if build was successful
-      echo "Checking build output..."
-      ls -la
-      if [ -d "dist" ]; then
-        echo "dist directory found, contents:"
-        ls -la dist/
-      else
-        echo "dist directory not found!"
-        exit 1
-      fi
-      
-      # Create backend static directory
-      echo "Creating backend static directory..."
-      mkdir -p ../backend/static
-      
-      # Copy built frontend files
-      echo "Copying built files..."
-      cp -r dist/* ../backend/static/
-      
-      # Verify copy was successful
-      echo "Verifying copy..."
-      ls -la ../backend/static/
-      
-      echo "Build completed successfully!"
+    buildCommand: chmod +x build-production.sh && ./build-production.sh
     startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: MONGODB_URL
