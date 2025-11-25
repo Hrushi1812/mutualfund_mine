@@ -1,7 +1,7 @@
 import axios from "axios";
 
-// Use environment variable for API URL, fallback to localhost for development
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+// Use '/api' in dev to leverage Vite proxy; allow override via VITE_API_URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
 const api = axios.create({
   baseURL: API_BASE_URL,

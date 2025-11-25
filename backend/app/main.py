@@ -29,10 +29,18 @@ if os.path.exists("static"):
 # API routes
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(portfolio.router, prefix="/portfolio", tags=["portfolio"])
+# Also expose routes under /api/* for proxying and consistency
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(portfolio.router, prefix="/api/portfolio", tags=["portfolio"])
 
 # API root route
 @app.get("/api")
 async def api_root():
+    return {"message": "Welcome to Mutual Fund Tracker API"}
+
+# Root route for simple health checks
+@app.get("/")
+async def root():
     return {"message": "Welcome to Mutual Fund Tracker API"}
 
 # Serve React app for all non-API routes

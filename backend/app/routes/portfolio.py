@@ -12,7 +12,7 @@ import jwt
 import os
 from app.routes.auth import get_user_by_email
 
-router = APIRouter(prefix="/portfolio", tags=["portfolio"])
+router = APIRouter(tags=["portfolio"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
@@ -54,6 +54,18 @@ async def upload_amc_file(
         h['ticker'] = isin_to_ticker.get(h['isin'])
     
     return holdings
+
+@router.get("/", summary="List user portfolios")
+async def list_portfolios(
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_database)
+):
+    portfolios = await db.portfolios.find({'user_id': current_user['email']}).to_list(100)
+    # Convert ObjectId to string for JSON serialization
+    for p in portfolios:
+        if '_id' in p:
+            p['_id'] = str(p['_id'])
+    return portfolios
 
 @router.post("/", summary="Create a new portfolio")
 async def create_portfolio(
