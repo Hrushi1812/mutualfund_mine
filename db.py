@@ -1,6 +1,7 @@
-from pymongo import MongoClient
 import os
+
 from dotenv import load_dotenv
+from pymongo import MongoClient
 
 load_dotenv()
 
@@ -17,7 +18,7 @@ def save_holdings(fund_name, holdings_list):
     collection.update_one(
         {"fund_name": fund_name},
         {"$set": {"fund_name": fund_name, "holdings": holdings_list}},
-        upsert=True
+        upsert=True,
     )
 
 

@@ -1,6 +1,7 @@
-from fastapi import FastAPI, UploadFile, File, Form
-from nav_logic import save_holdings_to_mongo, estimate_nav
+from fastapi import FastAPI, File, Form, UploadFile
+
 from db import list_funds
+from nav_logic import estimate_nav, save_holdings_to_mongo
 
 app = FastAPI(title="Mutual Fund NAV Estimator API")
 
@@ -24,6 +25,6 @@ async def upload(fund_name: str = Form(...), file: UploadFile = File(...)):
 async def estimate(
     fund_name: str = Form(...),
     prev_nav: float = Form(...),
-    investment: float = Form(...)
+    investment: float = Form(...),
 ):
     return estimate_nav(fund_name, prev_nav, investment)

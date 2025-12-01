@@ -1,10 +1,11 @@
+import random
+import time
+from datetime import datetime
+
 import pandas as pd
 import yfinance as yf
-import time
-import random
-from datetime import datetime
-from db import save_holdings, get_holdings
-import os
+
+from db import get_holdings, save_holdings
 
 
 def save_holdings_to_mongo(fund_name, excel_file):
@@ -64,5 +65,5 @@ def estimate_nav(fund_name, prev_nav, investment):
         "current_value": round(current_value, 2),
         "pnl": round(pnl, 2),
         "pnl_percentage": round(pnl_pct, 2),
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
