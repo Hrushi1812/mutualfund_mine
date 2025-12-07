@@ -14,19 +14,27 @@ db = client[MONGO_DB]
 collection = db[MONGO_COLLECTION]
 
 
-def save_holdings(fund_name, holdings_list):
+
+def save_holdings(fund_name, holdings_list, scheme_code=None):
+    data = {
+        "fund_name": fund_name,
+        "holdings": holdings_list,
+        "last_updated": True  # simplified timestamp
+    }
+    if scheme_code:
+        data["scheme_code"] = scheme_code
+        
     collection.update_one(
         {"fund_name": fund_name},
-        {"$set": {"fund_name": fund_name, "holdings": holdings_list}},
+        {"$set": data},
         upsert=True,
     )
 
 
 def get_holdings(fund_name):
     doc = collection.find_one({"fund_name": fund_name})
-    if doc:
-        return doc.get("holdings", [])
-    return None
+    # Return the full doc so we can access scheme_code
+    return doc
 
 
 def list_funds():
