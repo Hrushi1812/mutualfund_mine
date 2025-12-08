@@ -1,0 +1,18 @@
+INFO:     Will watch for changes in these directories: ['C:\\Users\\hrush\\Desktop\\mutualfund_mine-main\\backend']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [5916] using StatReload
+<frozen importlib._bootstrap>:488: Warning: Numpy built with MINGW-W64 on Windows 64 bits is experimental, and only available for 
+testing. You are advised not to use it for production. 
+
+CRASHES ARE TO BE EXPECTED - PLEASE REPORT THEM TO NUMPY DEVELOPERS
+C:\Users\hrush\Desktop\mutualfund_mine-main\backend\venv\Lib\site-packages\numpy\core\getlimits.py:225: RuntimeWarning: invalid value encountered in exp2
+  epsneg_f128 = exp2(ld(-113))
+C:\Users\hrush\Desktop\mutualfund_mine-main\backend\venv\Lib\site-packages\numpy\core\getlimits.py:226: RuntimeWarning: invalid value encountered in exp2
+  tiny_f128 = exp2(ld(-16382))
+C:\Users\hrush\Desktop\mutualfund_mine-main\backend\venv\Lib\site-packages\numpy\core\getlimits.py:240: RuntimeWarning: invalid value encountered in exp2
+  eps=exp2(ld(-112)),
+C:\Users\hrush\Desktop\mutualfund_mine-main\backend\venv\Lib\site-packages\numpy\core\getlimits.py:41: RuntimeWarning: invalid value encountered in nextafter
+  self._smallest_subnormal = nextafter(
+C:\Users\hrush\Desktop\mutualfund_mine-main\backend\venv\Lib\site-packages\numpy\core\getlimits.py:52: RuntimeWarning: invalid value encountered in log10
+  self.precision = int(-log10(self.eps))
+INFO:     Stopping reloader process [5916]
