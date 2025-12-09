@@ -52,3 +52,7 @@ def get_holdings(fund_name):
 
 def list_funds():
     return [doc["fund_name"] for doc in collection.find({}, {"fund_name": 1})]
+
+def delete_fund(fund_name):
+    result = collection.delete_one({"fund_name": fund_name})
+    return result.deleted_count > 0

@@ -1,6 +1,6 @@
 from fastapi import FastAPI, File, Form, UploadFile
 
-from db import list_funds, client
+from db import list_funds, delete_fund, client
 from nav_logic import save_holdings_to_mongo, calculate_pnl, search_scheme_code
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -77,3 +77,27 @@ async def upload(
         "analysis": analysis,
         "scheme_code_used": scheme_code
     }
+
+@app.post("/analyze-portfolio")
+async def analyze_portfolio(
+    fund_name: str = Form(...),
+    investment_amount: float = Form(...),
+    investment_date: str = Form(...) # YYYY-MM-DD
+):
+    """
+    Analyzes P&L for an existing fund in the DB.
+    Triggers Live NAV estimation if market is open/data available.
+    """
+    result = calculate_pnl(fund_name, investment_amount, investment_date)
+    return result
+
+@app.delete("/funds/{fund_name}")
+def remove_fund(fund_name: str):
+    success = delete_fund(fund_name)
+    if success:
+        return {"message": f"Deleted {fund_name}"}
+    return {"error": "Fund not found"}, 404
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

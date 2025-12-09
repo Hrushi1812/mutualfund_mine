@@ -1,0 +1,189 @@
+import React, { useState } from 'react';
+import { X, Calculator, Calendar, IndianRupee, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import api from '../api';
+
+const PortfolioAnalyzer = ({ fundName, onClose }) => {
+    // State for Input Form
+    const [investmentAmount, setInvestmentAmount] = useState('10000');
+    const [investmentDate, setInvestmentDate] = useState('');
+
+    // State for Analysis Results
+    const [result, setResult] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+
+    const handleAnalyze = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setError(null);
+        setResult(null);
+
+        const formData = new FormData();
+        formData.append('fund_name', fundName);
+        formData.append('investment_amount', investmentAmount);
+        // Default to today or some recent date if empty? No, backend needs date.
+        // Or we can just send today's date if user leaves it empty to check "1-day change"?
+        // Let's force date for now.
+        formData.append('investment_date', investmentDate);
+
+        try {
+            const response = await api.post('/analyze-portfolio', formData);
+            // The endpoint returns the analysis object directly, unlike upload-holdings
+            if (response.data.error) {
+                setError(response.data.error);
+            } else if (response.data && response.data.pnl !== undefined) {
+                setResult(response.data);
+            } else {
+                setError("No valid analysis data returned.");
+            }
+        } catch (err) {
+            console.error("Analysis Failed:", err);
+            setError("Failed to connect to server.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <AnimatePresence>
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                onClick={onClose}
+            >
+                <motion.div
+                    initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="bg-[#1a1b1e] border border-white/10 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl"
+                >
+                    {/* Header */}
+                    <div className="p-6 border-b border-white/5 flex justify-between items-start">
+                        <div>
+                            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                                <Calculator className="w-5 h-5 text-accent" />
+                                Live Analysis
+                            </h2>
+                            <p className="text-sm text-zinc-400 mt-1">{fundName}</p>
+                        </div>
+                        <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">
+                            <X className="w-6 h-6" />
+                        </button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-6">
+                        {!result ? (
+                            <form onSubmit={handleAnalyze} className="space-y-5">
+                                <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+                                    <p className="text-sm text-zinc-400 mb-4">
+                                        Enter your investment details to calculate real-time P&L based on the estimated Live NAV.
+                                    </p>
+
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Invested Amount (₹)</label>
+                                            <div className="relative">
+                                                <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                                                <input
+                                                    type="number"
+                                                    value={investmentAmount}
+                                                    onChange={(e) => setInvestmentAmount(e.target.value)}
+                                                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-3 text-white focus:outline-none focus:border-accent transition-colors"
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Investment Date</label>
+                                            <div className="relative">
+                                                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                                                <input
+                                                    type="date"
+                                                    value={investmentDate}
+                                                    onChange={(e) => setInvestmentDate(e.target.value)}
+                                                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-3 text-white focus:outline-none focus:border-accent transition-colors appearance-none"
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="w-full bg-accent hover:bg-accent/90 text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                >
+                                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Calculate Live P&L'}
+                                </button>
+                            </form>
+                        ) : (
+                            // Results View
+                            <div className="space-y-6">
+                                {/* Key Metrics Grid */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                                        <p className="text-xs text-zinc-400 mb-1">Estimated Value</p>
+                                        <p className="text-xl font-bold text-white">₹{result.current_value}</p>
+                                    </div>
+                                    <div className={`p-4 bg-white/5 rounded-2xl border border-white/5 ${result.pnl >= 0 ? 'border-l-green-500/50' : 'border-l-red-500/50'}`}>
+                                        <p className="text-xs text-zinc-400 mb-1">Total P&L</p>
+                                        <div className={`flex items-baseline gap-1 ${result.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                            <span className="text-xl font-bold">{result.pnl >= 0 ? '+' : ''}₹{result.pnl}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Detailed Breakdown */}
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl">
+                                        <span className="text-sm text-zinc-400">Return %</span>
+                                        <span className={`font-mono font-bold ${result.pnl_pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                            {result.pnl_pct}%
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl">
+                                        <span className="text-sm text-zinc-400">Live NAV (Est)</span>
+                                        <span className="font-mono text-white">₹{result.current_nav}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl">
+                                        <span className="text-sm text-zinc-400">Purchase NAV</span>
+                                        <span className="font-mono text-zinc-500">₹{result.purchase_nav}</span>
+                                    </div>
+                                </div>
+
+                                {/* Note */}
+                                <div className="text-[10px] text-center text-zinc-600 px-4">
+                                    {result.note}
+                                    <br />
+                                    Last Updated: {result.last_updated}
+                                </div>
+
+                                <button
+                                    onClick={() => setResult(null)}
+                                    className="w-full bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl transition-colors"
+                                >
+                                    Analyze Another Scenario
+                                </button>
+                            </div>
+                        )}
+
+                        {error && (
+                            <div className="mt-4 p-3 bg-red-500/10 text-red-400 text-sm rounded-xl text-center border border-red-500/20">
+                                {error}
+                            </div>
+                        )}
+                    </div>
+                </motion.div>
+            </motion.div>
+        </AnimatePresence>
+    );
+};
+
+export default PortfolioAnalyzer;

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Database, RefreshCw, ChevronRight } from 'lucide-react';
+import { Database, RefreshCw, ChevronRight, Trash2, AlertCircle } from 'lucide-react';
 import api from '../api';
 
-const FundList = () => {
+const FundList = ({ onSelect }) => {
     const [funds, setFunds] = useState([]);
     const [loading, setLoading] = useState(false);
 
@@ -18,6 +18,19 @@ const FundList = () => {
         }
     };
 
+    const handleDelete = async (e, fundName) => {
+        e.stopPropagation(); // Prevent opening the analyzer
+        if (window.confirm(`Are you sure you want to delete "${fundName}"?`)) {
+            try {
+                await api.delete(`/funds/${fundName}`);
+                fetchFunds(); // Refresh list
+            } catch (error) {
+                console.error("Failed to delete fund:", error);
+                alert("Failed to delete fund. Please try again.");
+            }
+        }
+    };
+
     useEffect(() => {
         fetchFunds();
     }, []);
@@ -25,13 +38,13 @@ const FundList = () => {
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-brand-text flex items-center gap-2">
-                    <Database className="w-5 h-5 text-brand-accent" />
+                <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+                    <Database className="w-5 h-5 text-accent" />
                     Your Portfolios
                 </h2>
                 <button
                     onClick={fetchFunds}
-                    className="p-2 hover:bg-brand-surface rounded-full transition-colors text-brand-muted hover:text-white"
+                    className="p-2 hover:bg-white/5 rounded-full transition-colors text-zinc-400 hover:text-white"
                     title="Refresh List"
                 >
                     <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -40,18 +53,31 @@ const FundList = () => {
 
             {funds.length === 0 ? (
                 <div className="text-center py-10 border-2 border-dashed border-white/5 rounded-xl">
-                    <p className="text-brand-muted">No portfolios found. Upload one to get started.</p>
+                    <p className="text-zinc-400">No portfolios found. Upload one to get started.</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {funds.map((fund, index) => (
-                        <div key={index} className="bg-brand-surface/50 border border-white/5 hover:border-brand-accent/50 p-4 rounded-xl transition-all cursor-pointer group">
+                        <div
+                            key={index}
+                            onClick={() => onSelect && onSelect(fund)}
+                            className="bg-white/5 border border-white/5 hover:border-accent/50 p-4 rounded-xl transition-all cursor-pointer group active:scale-[0.98] relative"
+                        >
                             <div className="flex justify-between items-center">
-                                <div className="flex-1">
-                                    <h3 className="font-semibold text-brand-text truncate pr-2">{fund}</h3>
-                                    <p className="text-xs text-brand-muted mt-1">Last updated: Today</p>
+                                <div className="flex-1 overflow-hidden">
+                                    <h3 className="font-semibold text-foreground truncate pr-8">{fund}</h3>
+                                    <p className="text-xs text-zinc-400 mt-1">Click to Analyze</p>
                                 </div>
-                                <ChevronRight className="w-5 h-5 text-brand-muted group-hover:text-brand-accent transition-colors" />
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={(e) => handleDelete(e, fund)}
+                                        className="p-2 hover:bg-red-500/20 text-zinc-500 hover:text-red-500 rounded-lg transition-colors z-10"
+                                        title="Delete Portfolio"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                    <ChevronRight className="w-5 h-5 text-zinc-400 group-hover:text-accent transition-colors" />
+                                </div>
                             </div>
                         </div>
                     ))}
