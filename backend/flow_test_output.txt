@@ -1,0 +1,4 @@
+Loaded 2211 stocks
+ISIN -> SYMBOL -> % CHANGE
+INE040A01034 -> ❌ Not Found
+INE200A01026 -> ❌ Not Found

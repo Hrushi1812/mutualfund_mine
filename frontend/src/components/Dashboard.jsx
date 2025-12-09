@@ -3,7 +3,6 @@ import { LayoutDashboard, LogOut, PieChart } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import UploadHoldings from './UploadHoldings';
 import FundList from './FundList';
-import NavEstimator from './NavEstimator';
 
 const Dashboard = () => {
     const navigate = useNavigate();
@@ -22,7 +21,7 @@ const Dashboard = () => {
                         <div className="p-2 bg-brand-accent/20 rounded-lg">
                             <PieChart className="w-6 h-6 text-brand-accent" />
                         </div>
-                        <h1 className="text-xl font-bold tracking-tight">FinDash</h1>
+                        <h1 className="text-xl font-bold tracking-tight">Mutual Fund Tracker</h1>
                     </div>
 
                     <button
@@ -46,18 +45,13 @@ const Dashboard = () => {
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                     {/* Left Column (Upload & Lists) - Weighted larger */}
-                    <div className="lg:col-span-7 space-y-8">
+                    <div className="lg:col-span-12 space-y-8">
                         <UploadHoldings onUploadSuccess={() => setRefreshTrigger(p => p + 1)} />
 
                         {/* We'll wrap FundList in a similar card style later or now */}
                         <div className="bg-brand-card border border-white/5 rounded-2xl p-6 shadow-xl">
                             <FundList key={refreshTrigger} />
                         </div>
-                    </div>
-
-                    {/* Right Column (Estimator/Stats) */}
-                    <div className="lg:col-span-5">
-                        <NavEstimator />
                     </div>
                 </div>
             </main>

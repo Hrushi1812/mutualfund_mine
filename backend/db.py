@@ -2,6 +2,7 @@ import os
 
 from dotenv import load_dotenv
 from pymongo import MongoClient
+from pymongo.errors import InvalidURI, ConfigurationError
 
 load_dotenv()
 
@@ -9,7 +10,19 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.getenv("MONGO_DB", "mutual_funds")
 MONGO_COLLECTION = os.getenv("MONGO_COLLECTION", "holdings")
 
-client = MongoClient(MONGO_URI)
+try:
+    client = MongoClient(MONGO_URI)
+    # The ismaster command is cheap and does not require auth.
+    client.admin.command('ismaster')
+except (InvalidURI, ConfigurationError) as e:
+    print(f"\n❌ MongoDB Connection Error: {e}")
+    print("👉 HINT: If you have special characters (like '@', ':', '%') in your password, you MUST 'URL Escape' them.")
+    print("   Example: '@' becomes '%40', '+' becomes '%2B'.\n")
+    # We don't exit here because local dev might work without auth, but for Atlas it will fail.
+    # However, app.py imports objects from here. If client fails, app might crash later.
+    # Let's let it crash but after printing the hint.
+    raise e
+
 db = client[MONGO_DB]
 collection = db[MONGO_COLLECTION]
 

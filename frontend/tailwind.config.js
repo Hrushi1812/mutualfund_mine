@@ -7,21 +7,26 @@ export default {
     theme: {
         extend: {
             colors: {
-                brand: {
-                    dark: '#f8fafc',      // Slate-50 (Soft Off-White Background)
-                    card: '#ffffff',      // Pure White Cards
-                    surface: '#f1f5f9',   // Slate-100 (Inputs/Secondary)
-                    accent: '#4f46e5',    // Indigo-600 (Vibrant, professional)
-                    glow: '#818cf8',      // Indigo-400
-                    text: '#0f172a',      // Slate-900 (High contrast dark text)
-                    muted: '#64748b',     // Slate-500
-                    success: '#059669',   // Emerald-600
-                    error: '#dc2626',     // Red-600
-                }
+                background: "#09090b", // zinc-950
+                foreground: "#fafafa", // zinc-50
+                primary: "#3b82f6", // blue-500
+                secondary: "#a1a1aa", // zinc-400
+                accent: "#6366f1", // indigo-500
+                card: "rgba(255, 255, 255, 0.05)",
+                "card-hover": "rgba(255, 255, 255, 0.1)",
             },
             fontFamily: {
-                sans: ['Inter', 'sans-serif'],
-            }
+                sans: ["Inter", "sans-serif"],
+            },
+            animation: {
+                "float": "float 6s ease-in-out infinite",
+            },
+            keyframes: {
+                float: {
+                    "0%, 100%": { transform: "translateY(0)" },
+                    "50%": { transform: "translateY(-20px)" },
+                },
+            },
         },
     },
     plugins: [],

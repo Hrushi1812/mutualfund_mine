@@ -1,7 +1,7 @@
 from fastapi import FastAPI, File, Form, UploadFile
 
-from db import list_funds
-from nav_logic import estimate_nav, save_holdings_to_mongo
+from db import list_funds, client
+from nav_logic import save_holdings_to_mongo, calculate_pnl, search_scheme_code
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,6 +15,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+def startup_db_client():
+    try:
+        # Check connection
+        client.admin.command('ismaster')
+        print("\n✅ Connected to MongoDB successfully!\n")
+    except Exception as e:
+        print(f"\n❌ MongoDB Startup Error: {e}\n")
 
 @app.get("/")
 def home():
@@ -30,16 +38,42 @@ def view_funds():
 async def upload(
     fund_name: str = Form(...),
     scheme_code: str = Form(None), # Optional but recommended
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    investment_type: str = Form(None), # 'lumpsum' or 'sip'
+    invested_amount: str = Form(None), # Changed to str to handle empty strings
+    invested_date: str = Form(None), # YYYY-MM-DD
 ):
-    return save_holdings_to_mongo(fund_name, file, scheme_code)
+    # 1. Attempt to resolve Scheme Code if missing
+    if not scheme_code:
+        print(f"Searching scheme code for {fund_name}...")
+        found_code = search_scheme_code(fund_name)
+        if found_code:
+            scheme_code = found_code
+            print(f"Resolved {fund_name} -> {scheme_code}")
 
+    # 2. Save Holdings
+    save_result = save_holdings_to_mongo(fund_name, file, scheme_code)
+    
+    # 3. If investment details provided, Calculate P&L immediately
+    analysis = None
+    
+    # Parse amount safely
+    amount_float = None
+    if invested_amount and invested_amount.strip():
+        try:
+           amount_float = float(invested_amount)
+        except ValueError:
+           print(f"Invalid amount format: {invested_amount}")
 
-@app.post("/estimate-nav/")
-async def estimate(
-    fund_name: str = Form(...),
-    investment: float = Form(...),
-    input_date: str = Form(None), # YYYY-MM-DD
-):
-    # prev_nav is now fetched automatically
-    return estimate_nav(fund_name, investment, input_date)
+    if amount_float and invested_date:
+        try:
+            analysis = calculate_pnl(fund_name, amount_float, invested_date)
+        except Exception as e:
+            print(f"Analysis failed: {e}")
+            analysis = {"error": str(e)}
+
+    return {
+        "upload_status": save_result,
+        "analysis": analysis,
+        "scheme_code_used": scheme_code
+    }
