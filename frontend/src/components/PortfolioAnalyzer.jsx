@@ -9,9 +9,14 @@ const PortfolioAnalyzer = ({ fundName, onClose }) => {
     const [loading, setLoading] = useState(true); // Start loading immediately
     const [error, setError] = useState(null);
 
+    const hasFetched = React.useRef(false);
+
     // Auto-analyze on mount
     React.useEffect(() => {
-        handleAnalyze();
+        if (!hasFetched.current) {
+            handleAnalyze();
+            hasFetched.current = true;
+        }
     }, []);
 
     const handleAnalyze = async () => {

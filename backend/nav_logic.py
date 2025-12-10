@@ -125,7 +125,9 @@ def get_latest_nav(scheme_code):
 
 def get_nav_at_date(scheme_code, target_date_str):
     """
-    Fetches NAV for a specific date (DD-MM-YYYY)
+    Fetches NAV for a specific date (DD-MM-YYYY).
+    If exact date is missing (weekend/holiday), returns the last available NAV.
+    Returns: tuple (nav_value, actual_date_str) or None
     """
     try:
         url = f"https://api.mfapi.in/mf/{scheme_code}"
@@ -134,11 +136,33 @@ def get_nav_at_date(scheme_code, target_date_str):
             data = response.json()
             if data.get("status") == "SUCCESS":
                 nav_data = data["data"]
-                # Linear search or Dictionary lookup (more efficient)
-                # API returns list sorted by date desc usually.
+                
+                # Parse target date
+                try:
+                    target_date = datetime.strptime(target_date_str, "%d-%m-%Y")
+                except ValueError:
+                    # Try YYYY-MM-DD fallback just in case
+                     target_date = datetime.strptime(target_date_str, "%Y-%m-%d")
+
+                # Iterate to find the first date <= target_date
+                # API data is sorted by date DESC (newest first)
                 for entry in nav_data:
-                    if entry["date"] == target_date_str:
-                        return float(entry["nav"])
+                    entry_date_str = entry["date"]
+                    entry_nav = float(entry["nav"])
+                    
+                    try:
+                        entry_date = datetime.strptime(entry_date_str, "%d-%m-%Y")
+                        
+                        if entry_date <= target_date:
+                            # Found the nearest valid date
+                            if entry_date != target_date:
+                                # Optional: log if needed
+                                pass
+                            return (entry_nav, entry_date_str)
+                            
+                    except ValueError:
+                        continue
+
     except Exception as e:
         print(f"Error fetching historical NAV: {e}")            
     return None
@@ -189,6 +213,8 @@ def calculate_pnl(fund_name, investment, input_date):
         
         print(f"Calculating Live NAV for {fund_name} with {len(holdings)} holdings...")
         
+        start_time = time.time()
+        
         for stock in holdings:
             symbol = stock.get("Symbol")
             weight = stock.get("Weight", 0)
@@ -204,8 +230,8 @@ def calculate_pnl(fund_name, investment, input_date):
                 # Small delay to be polite to NSE
                 # time.sleep(0.05) 
         
-        # If we successfully checked a significant portion of portfolio (e.g. > 50% weight)
-        if total_weight_checked > 50:
+        # If we successfully checked a significant portion of portfolio (e.g. > 0.5 weight)
+        if total_weight_checked > 0.5:
              # Normalize contribution if total weight < 100 (e.g. cash component)
              # Portfolio Change % = Sum(Weight * StockChange) / TotalWeight
              portfolio_change = total_pchange_contribution / total_weight_checked
@@ -215,7 +241,8 @@ def calculate_pnl(fund_name, investment, input_date):
              
              current_nav = live_nav
              is_live = True
-             live_nav_note = f" | Live Est: {current_nav:.4f} ({portfolio_change:+.2f}%) based on {stocks_checked} stocks"
+             elapsed = time.time() - start_time
+             live_nav_note = f" | Live Est: {current_nav:.4f} ({portfolio_change:+.2f}%) based on {stocks_checked} stocks ({elapsed:.2f}s)"
              print(live_nav_note)
         else:
              print(f"Skipping Live NAV: Only checked {total_weight_checked}% weight")
@@ -232,10 +259,14 @@ def calculate_pnl(fund_name, investment, input_date):
             d_obj = datetime.strptime(input_date, "%Y-%m-%d")
             api_date_str = d_obj.strftime("%d-%m-%Y")
             
-            hist_nav = get_nav_at_date(scheme_code, api_date_str)
-            if hist_nav:
+            hist_result = get_nav_at_date(scheme_code, api_date_str)
+            if hist_result:
+                hist_nav, actual_date = hist_result
                 purchase_nav = hist_nav
-                purchase_note = f"NAV on {api_date_str}"
+                if actual_date != api_date_str:
+                     purchase_note = f"NAV on {actual_date} (adj from {api_date_str})"
+                else:
+                     purchase_note = f"NAV on {actual_date}"
             else:
                  purchase_note = f"NAV missing for {api_date_str}"
         except Exception as e:
@@ -289,6 +320,7 @@ def get_ticker_from_isin(isin):
 def save_holdings_to_mongo(fund_name, excel_file, scheme_code=None, invested_amount=None, invested_date=None):
     # 1. Read Excel without headers first to find the header row
     try:
+        # Read full file to find header
         df_raw = pd.read_excel(excel_file.file, header=None)
     except Exception as e:
          return {"error": f"Failed to read Excel: {str(e)}"}
@@ -298,10 +330,20 @@ def save_holdings_to_mongo(fund_name, excel_file, scheme_code=None, invested_amo
     for idx, row in df_raw.iterrows():
         # Check if 'ISIN' is in this row (case insensitive conversion for safety)
         row_str = row.astype(str).str.upper().tolist()
-        if "ISIN" in row_str:
+        # Look for "ISIN" or "ISIN CODE" or "ISIN NO"
+        # We check if any cell in the row *contains* "ISIN" as a distinct word or matches closely
+        if any(x.strip() in ["ISIN", "ISIN CODE", "ISIN NO", "ISIN NUMBER"] for x in row_str if isinstance(x, str)):
             header_idx = idx
             break
     
+    if header_idx is None:
+        # Fallback: check if ANY cell contains "ISIN" substring
+        for idx, row in df_raw.iterrows():
+             row_str = row.astype(str).str.upper().tolist()
+             if any("ISIN" in x for x in row_str if isinstance(x, str)):
+                 header_idx = idx
+                 break
+
     if header_idx is None:
         return {"error": "Could not find 'ISIN' column header in the file."}
     
@@ -310,51 +352,69 @@ def save_holdings_to_mongo(fund_name, excel_file, scheme_code=None, invested_amo
     df = pd.read_excel(excel_file.file, header=header_idx)
     
     # 4. Normalize columns
-    # We expect columns like "ISIN", "Name of the Instrument", "% to NAV"
-    
-    # Map typical columns to our standard names
     col_map = {}
     for col in df.columns:
         c = str(col).strip()
-        if "ISIN" in c: col_map[col] = "ISIN"
-        elif "Name" in c and "Instrument" in c: col_map[col] = "Name"
-        elif "%" in c and "NAV" in c: col_map[col] = "Weight"
-        elif "%" in c and "Asset" in c: col_map[col] = "Weight" # Backup
+        c_upper = c.upper()
+        
+        if "ISIN" in c_upper: 
+            col_map[col] = "ISIN"
+        elif "NAME" in c_upper and "INSTRUMENT" in c_upper: 
+            col_map[col] = "Name"
+        elif "%" in c and "NAV" in c: 
+            col_map[col] = "Weight"
+        elif "%" in c and "ASSET" in c_upper: 
+            col_map[col] = "Weight" # Backup
     
     df = df.rename(columns=col_map)
     
     # Basic Validation
     if "ISIN" not in df.columns or "Weight" not in df.columns:
-        return {"error": f"Missing required columns. Found: {df.columns.tolist()}"}
+        return {"error": f"Missing required columns (ISIN, Weight). Found: {df.columns.tolist()}"}
     
-    # 5. Filter valid rows (exclude sub-headers like "Equity...")
-    # Valid ISINs usually start with "INE" or "INF" and are length 12
+    # 5. Clean and Filter Data
+    
+    # Drop rows where ISIN is NaN (removes headers/footers/empty lines)
     df = df.dropna(subset=["ISIN"])
-    df["ISIN"] = df["ISIN"].astype(str).str.strip()
-    df = df[df["ISIN"].str.len() == 12] # Filter for valid ISIN length
+    
+    # Clean ISIN
+    df["ISIN"] = df["ISIN"].astype(str).str.strip().str.upper()
+    # Filter valid ISINs (Length 12 and alphanumeric)
+    # Regex: ^[A-Z0-9]{12}$
+    df = df[df["ISIN"].str.match(r'^[A-Z0-9]{12}$', na=False)]
+    
+    # Remove duplicates (keep first occurrence)
+    df = df.drop_duplicates(subset=["ISIN"], keep="first")
+    
+    # Clean Weight
+    # Convert "5.45%" string to 5.45 float
+    def clean_weight(val):
+        try:
+            if pd.isna(val): return 0.0
+            s = str(val).strip().replace("%", "")
+            return float(s)
+        except:
+            return 0.0
+
+    df["Weight"] = df["Weight"].apply(clean_weight)
     
     # 6. Map ISIN to Ticker
-    # This can be slow loop. In production, we'd parallelize or cache.
-    # For now, we loop.
+    # Optimization: Load NSE CSV once
+    nse_source = load_nse_csv()
+    
     holdings_list = []
+    unresolved = []
     
     for _, row in df.iterrows():
         isin = row["ISIN"]
         name = row.get("Name", "Unknown")
-        weight = row["Weight"]
+        weight = float(row["Weight"])
         
-        # Try to resolve Ticker
-        # Try to resolve Ticker (pass table if optimized)
-        # For now, we load CSV once per file upload? 
-        # Better: load CSV once outside the loop
-        if 'nse_table_cache' not in locals():
-             nse_table_cache = load_nse_csv()
-             
-        ticker = isin_to_symbol_nse(isin, nse_table=nse_table_cache)
-        
-        # Fallback: If ticker not found, maybe try appending .NS to name? (Risky)
-        # Or just log it.
-        # If we can't find ticker, we can't track it.
+        if weight <= 0:
+            continue
+            
+        # Try to resolve Ticker using pre-loaded table
+        ticker = isin_to_symbol_nse(isin, nse_table=nse_source)
         
         if ticker:
             holdings_list.append({
@@ -364,10 +424,14 @@ def save_holdings_to_mongo(fund_name, excel_file, scheme_code=None, invested_amo
                 "Weight": weight
             })
         else:
-            print(f"Skipping {name} ({isin}): Could not resolve Ticker.")
+            unresolved.append(f"{name} ({isin})")
+            # print(f"Skipping {name} ({isin}): Could not resolve Ticker.")
             
     if not holdings_list:
-        return {"error": "No valid holdings could be resolved to tickers."}
+         err_msg = "No valid holdings resolved."
+         if unresolved:
+             err_msg += f" Unresolved items: {', '.join(unresolved[:5])}..."
+         return {"error": err_msg}
 
     # 7. Save to DB
     save_holdings(fund_name, holdings_list, scheme_code, invested_amount, invested_date)
@@ -375,7 +439,8 @@ def save_holdings_to_mongo(fund_name, excel_file, scheme_code=None, invested_amo
     return {
         "message": f"Holdings saved for {fund_name}",
         "count": len(holdings_list),
-        "unresolved_count": len(df) - len(holdings_list)
+        "unresolved_count": len(unresolved),
+        "unresolved_samples": unresolved[:5]
     }
 
 

@@ -10,8 +10,11 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.getenv("MONGO_DB", "mutual_funds")
 MONGO_COLLECTION = os.getenv("MONGO_COLLECTION", "holdings")
 
+import certifi
+
 try:
-    client = MongoClient(MONGO_URI)
+    # Use certifi for explicit CA bundle (fixes SSL errors on some Windows/Mac setups)
+    client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
     # The ismaster command is cheap and does not require auth.
     client.admin.command('ismaster')
 except (InvalidURI, ConfigurationError) as e:
