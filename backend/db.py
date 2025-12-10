@@ -28,7 +28,7 @@ collection = db[MONGO_COLLECTION]
 
 
 
-def save_holdings(fund_name, holdings_list, scheme_code=None):
+def save_holdings(fund_name, holdings_list, scheme_code=None, invested_amount=None, invested_date=None):
     data = {
         "fund_name": fund_name,
         "holdings": holdings_list,
@@ -36,6 +36,10 @@ def save_holdings(fund_name, holdings_list, scheme_code=None):
     }
     if scheme_code:
         data["scheme_code"] = scheme_code
+    if invested_amount is not None:
+        data["invested_amount"] = invested_amount
+    if invested_date:
+        data["invested_date"] = invested_date
         
     collection.update_one(
         {"fund_name": fund_name},

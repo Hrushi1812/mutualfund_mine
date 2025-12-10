@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+*.env
+
+# Specific environment file
+backend/.env
+
+# React/Node
+node_modules/
+dist/
+build/
+.DS_Store

@@ -52,7 +52,7 @@ async def upload(
             print(f"Resolved {fund_name} -> {scheme_code}")
 
     # 2. Save Holdings
-    save_result = save_holdings_to_mongo(fund_name, file, scheme_code)
+    save_result = save_holdings_to_mongo(fund_name, file, scheme_code, invested_amount, invested_date)
     
     # 3. If investment details provided, Calculate P&L immediately
     analysis = None
@@ -81,8 +81,8 @@ async def upload(
 @app.post("/analyze-portfolio")
 async def analyze_portfolio(
     fund_name: str = Form(...),
-    investment_amount: float = Form(...),
-    investment_date: str = Form(...) # YYYY-MM-DD
+    investment_amount: float = Form(None),
+    investment_date: str = Form(None) # YYYY-MM-DD
 ):
     """
     Analyzes P&L for an existing fund in the DB.

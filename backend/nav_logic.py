@@ -164,6 +164,13 @@ def calculate_pnl(fund_name, investment, input_date):
     official_nav = current_data["nav"]
     nav_date = current_data["date"]
     current_nav = official_nav # Default
+
+    # Use stored values if not provided
+    if not investment or not input_date:
+        if not doc.get("invested_amount") or not doc.get("invested_date"):
+             return {"error": "Investment details not found. Please re-upload portfolio."}
+        investment = float(doc.get("invested_amount"))
+        input_date = doc.get("invested_date")
     
     # ---------------- LIVE NAV ESTIMATION ----------------
     live_nav_note = ""
@@ -279,7 +286,7 @@ def get_ticker_from_isin(isin):
     """
     return isin_to_symbol_nse(isin)
 
-def save_holdings_to_mongo(fund_name, excel_file, scheme_code=None):
+def save_holdings_to_mongo(fund_name, excel_file, scheme_code=None, invested_amount=None, invested_date=None):
     # 1. Read Excel without headers first to find the header row
     try:
         df_raw = pd.read_excel(excel_file.file, header=None)
@@ -363,7 +370,7 @@ def save_holdings_to_mongo(fund_name, excel_file, scheme_code=None):
         return {"error": "No valid holdings could be resolved to tickers."}
 
     # 7. Save to DB
-    save_holdings(fund_name, holdings_list, scheme_code)
+    save_holdings(fund_name, holdings_list, scheme_code, invested_amount, invested_date)
 
     return {
         "message": f"Holdings saved for {fund_name}",

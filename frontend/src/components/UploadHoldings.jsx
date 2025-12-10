@@ -92,7 +92,7 @@ const UploadHoldings = ({ onUploadSuccess }) => {
                 <div className="p-2 rounded-lg bg-primary/20 text-primary">
                     <Upload className="w-5 h-5" />
                 </div>
-                Upload Holdings
+                Upload Portfolio
             </h2>
 
             <form onSubmit={handleUpload} className="space-y-6">
@@ -217,7 +217,7 @@ const UploadHoldings = ({ onUploadSuccess }) => {
                     {loading ? (
                         <span className="animate-pulse">Processing Portfolio...</span>
                     ) : (
-                        <>Analyze Portfolio <Upload className="w-4 h-4 group-hover:-translate-y-1 transition-transform" /></>
+                        <>Upload Portfolio <Upload className="w-4 h-4 group-hover:-translate-y-1 transition-transform" /></>
                     )}
                 </button>
 

@@ -4,32 +4,27 @@ import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api';
 
 const PortfolioAnalyzer = ({ fundName, onClose }) => {
-    // State for Input Form
-    const [investmentAmount, setInvestmentAmount] = useState('10000');
-    const [investmentDate, setInvestmentDate] = useState('');
-
     // State for Analysis Results
     const [result, setResult] = useState(null);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true); // Start loading immediately
     const [error, setError] = useState(null);
 
-    const handleAnalyze = async (e) => {
-        e.preventDefault();
+    // Auto-analyze on mount
+    React.useEffect(() => {
+        handleAnalyze();
+    }, []);
+
+    const handleAnalyze = async () => {
         setLoading(true);
         setError(null);
         setResult(null);
 
         const formData = new FormData();
         formData.append('fund_name', fundName);
-        formData.append('investment_amount', investmentAmount);
-        // Default to today or some recent date if empty? No, backend needs date.
-        // Or we can just send today's date if user leaves it empty to check "1-day change"?
-        // Let's force date for now.
-        formData.append('investment_date', investmentDate);
+        // No longer sending amount/date manually
 
         try {
             const response = await api.post('/analyze-portfolio', formData);
-            // The endpoint returns the analysis object directly, unlike upload-holdings
             if (response.data.error) {
                 setError(response.data.error);
             } else if (response.data && response.data.pnl !== undefined) {
@@ -66,7 +61,7 @@ const PortfolioAnalyzer = ({ fundName, onClose }) => {
                         <div>
                             <h2 className="text-xl font-bold text-white flex items-center gap-2">
                                 <Calculator className="w-5 h-5 text-accent" />
-                                Live Analysis
+                                Portfolio Analysis
                             </h2>
                             <p className="text-sm text-zinc-400 mt-1">{fundName}</p>
                         </div>
@@ -77,59 +72,40 @@ const PortfolioAnalyzer = ({ fundName, onClose }) => {
 
                     {/* Content */}
                     <div className="p-6">
-                        {!result ? (
-                            <form onSubmit={handleAnalyze} className="space-y-5">
-                                <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-                                    <p className="text-sm text-zinc-400 mb-4">
-                                        Enter your investment details to calculate real-time P&L based on the estimated Live NAV.
-                                    </p>
-
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Invested Amount (₹)</label>
-                                            <div className="relative">
-                                                <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                                                <input
-                                                    type="number"
-                                                    value={investmentAmount}
-                                                    onChange={(e) => setInvestmentAmount(e.target.value)}
-                                                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-3 text-white focus:outline-none focus:border-accent transition-colors"
-                                                    required
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Investment Date</label>
-                                            <div className="relative">
-                                                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                                                <input
-                                                    type="date"
-                                                    value={investmentDate}
-                                                    onChange={(e) => setInvestmentDate(e.target.value)}
-                                                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-3 text-white focus:outline-none focus:border-accent transition-colors appearance-none"
-                                                    required
-                                                />
-                                            </div>
-                                        </div>
+                        {loading ? (
+                            <div className="flex flex-col items-center justify-center py-10 space-y-4">
+                                <div className="relative">
+                                    <div className="w-16 h-16 border-4 border-white/10 border-t-accent rounded-full animate-spin"></div>
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="w-8 h-8 bg-accent/20 rounded-full animate-pulse"></div>
                                     </div>
                                 </div>
-
+                                <div className="text-center">
+                                    <p className="text-white font-medium">Analyzing Portfolio...</p>
+                                    <p className="text-sm text-zinc-500 mt-1">Fetching real-time NAV and calculating P&L</p>
+                                </div>
+                            </div>
+                        ) : error ? (
+                            <div className="flex flex-col items-center justify-center py-6 text-center">
+                                <div className="p-3 bg-red-500/10 rounded-full mb-3 text-red-500 border border-red-500/20">
+                                    <TrendingDown className="w-8 h-8" />
+                                </div>
+                                <h3 className="text-lg font-bold text-white mb-2">Analysis Failed</h3>
+                                <p className="text-sm text-zinc-400 mb-6">{error}</p>
                                 <button
-                                    type="submit"
-                                    disabled={loading}
-                                    className="w-full bg-accent hover:bg-accent/90 text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                    onClick={onClose}
+                                    className="px-6 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-colors border border-white/5"
                                 >
-                                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Calculate Live P&L'}
+                                    Close
                                 </button>
-                            </form>
-                        ) : (
+                            </div>
+                        ) : result ? (
                             // Results View
                             <div className="space-y-6">
                                 {/* Key Metrics Grid */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                                        <p className="text-xs text-zinc-400 mb-1">Estimated Value</p>
+                                        <p className="text-xs text-zinc-400 mb-1">Current Value</p>
                                         <p className="text-xl font-bold text-white">₹{result.current_value}</p>
                                     </div>
                                     <div className={`p-4 bg-white/5 rounded-2xl border border-white/5 ${result.pnl >= 0 ? 'border-l-green-500/50' : 'border-l-red-500/50'}`}>
@@ -149,12 +125,12 @@ const PortfolioAnalyzer = ({ fundName, onClose }) => {
                                         </span>
                                     </div>
                                     <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl">
-                                        <span className="text-sm text-zinc-400">Live NAV (Est)</span>
-                                        <span className="font-mono text-white">₹{result.current_nav}</span>
+                                        <span className="text-sm text-zinc-400">Invested Amount</span>
+                                        <span className="font-mono text-zinc-300">₹{result.invested_amount}</span>
                                     </div>
                                     <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl">
-                                        <span className="text-sm text-zinc-400">Purchase NAV</span>
-                                        <span className="font-mono text-zinc-500">₹{result.purchase_nav}</span>
+                                        <span className="text-sm text-zinc-400">Live NAV (Est)</span>
+                                        <span className="font-mono text-white">₹{result.current_nav}</span>
                                     </div>
                                 </div>
 
@@ -164,21 +140,8 @@ const PortfolioAnalyzer = ({ fundName, onClose }) => {
                                     <br />
                                     Last Updated: {result.last_updated}
                                 </div>
-
-                                <button
-                                    onClick={() => setResult(null)}
-                                    className="w-full bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl transition-colors"
-                                >
-                                    Analyze Another Scenario
-                                </button>
                             </div>
-                        )}
-
-                        {error && (
-                            <div className="mt-4 p-3 bg-red-500/10 text-red-400 text-sm rounded-xl text-center border border-red-500/20">
-                                {error}
-                            </div>
-                        )}
+                        ) : null}
                     </div>
                 </motion.div>
             </motion.div>
