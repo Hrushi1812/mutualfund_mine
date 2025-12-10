@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Database, RefreshCw, ChevronRight, Trash2, AlertCircle } from 'lucide-react';
-import api from '../api';
+import api from '../../api';
 
 const FundList = ({ onSelect }) => {
     const [funds, setFunds] = useState([]);

@@ -1,5 +1,9 @@
 import requests
 import os
+import sys
+
+# Ensure backend is in path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 BASE_URL = "http://127.0.0.1:8000"
 

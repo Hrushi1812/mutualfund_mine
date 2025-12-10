@@ -4,7 +4,7 @@ import os
 import time
 
 # Ensure backend is in path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from db import get_holdings, list_funds
 from nav_logic import get_live_price_change

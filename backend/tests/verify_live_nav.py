@@ -1,8 +1,9 @@
+
 import sys
 import os
 
 # Add backend to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from nav_logic import calculate_pnl, get_live_price_change
 

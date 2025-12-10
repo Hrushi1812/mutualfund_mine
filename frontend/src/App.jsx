@@ -2,8 +2,8 @@ import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Lenis from "lenis";
 import LandingPage from "./components/home/LandingPage";
-import LoginPage from "./components/LoginPage";
-import Dashboard from "./components/Dashboard";
+import LoginPage from "./pages/LoginPage";
+import Dashboard from "./pages/Dashboard";
 
 function App() {
   useEffect(() => {

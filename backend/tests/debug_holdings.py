@@ -1,3 +1,9 @@
+
+import sys
+import os
+# Ensure parent directory is in path to import backend modules
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from db import list_funds, get_holdings
 from nav_logic import get_live_price_change, load_nse_csv, isin_to_symbol_nse
 
@@ -63,4 +69,3 @@ for fund in funds:
         
     print(f"  Holdings with Symbols: {resolved_count}/{len(holdings)}")
     print(f"  Total Weight recorded: {total_weight}%")
-

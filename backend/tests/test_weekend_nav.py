@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 
 # Ensure backend is in path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from nav_logic import get_nav_at_date
 

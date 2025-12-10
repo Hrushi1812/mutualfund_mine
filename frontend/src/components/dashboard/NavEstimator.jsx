@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Calculator, TrendingUp, TrendingDown, IndianRupee, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
-import api from '../api';
+import api from '../../api';
 
 const NavEstimator = () => {
     const [formData, setFormData] = useState({

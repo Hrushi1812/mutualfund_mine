@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Calculator, Calendar, IndianRupee, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import api from '../api';
+import api from '../../api';
 
 const PortfolioAnalyzer = ({ fundName, onClose }) => {
     // State for Analysis Results

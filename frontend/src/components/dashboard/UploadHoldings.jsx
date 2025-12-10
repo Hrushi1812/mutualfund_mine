@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Upload, Calendar, FileSpreadsheet, CheckCircle2, AlertCircle, IndianRupee, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import api from '../api';
+import api from '../../api';
 
 const UploadHoldings = ({ onUploadSuccess }) => {
     const [mode, setMode] = useState('lumpsum'); // 'lumpsum' | 'sip'

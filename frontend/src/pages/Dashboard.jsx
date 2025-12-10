@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { LayoutDashboard, LogOut, PieChart } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import UploadHoldings from './UploadHoldings';
-import FundList from './FundList';
-import PortfolioAnalyzer from './PortfolioAnalyzer';
+import UploadHoldings from '../components/dashboard/UploadHoldings';
+import FundList from '../components/dashboard/FundList';
+import PortfolioAnalyzer from '../components/dashboard/PortfolioAnalyzer';
 
 const Dashboard = () => {
     const navigate = useNavigate();
