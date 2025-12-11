@@ -6,19 +6,15 @@ from bson import ObjectId
 from db import holdings_collection
 from typing import List, Optional
 
-# --- Helper Functions (Previously in nav_logic.py) ---
-NSE_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-    "Accept": "application/json,text/html,*/*",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://www.nseindia.com/"
-}
+from datetime import datetime
+from utils.common import NSE_HEADERS, NSE_CSV_URL
+
 session = requests.Session()
 session.headers.update(NSE_HEADERS)
 
 def load_nse_csv():
     """Downloads and caches the NSE Equity Master List (CSV)."""
-    url = "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv"
+    url = NSE_CSV_URL
     try:
         r = session.get(url, timeout=20)
         f = StringIO(r.text)

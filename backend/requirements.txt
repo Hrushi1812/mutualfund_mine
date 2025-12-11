@@ -36,3 +36,4 @@ yfinance
 passlib[argon2]
 python-jose[cryptography]
 python-multipart
+pydantic[email]
