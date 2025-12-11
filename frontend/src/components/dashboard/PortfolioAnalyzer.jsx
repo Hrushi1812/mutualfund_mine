@@ -3,7 +3,7 @@ import { X, Calculator, Calendar, IndianRupee, TrendingUp, TrendingDown, Loader2
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../api';
 
-const PortfolioAnalyzer = ({ fundName, onClose }) => {
+const PortfolioAnalyzer = ({ fundId, onClose }) => {
     // State for Analysis Results
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(true); // Start loading immediately
@@ -25,7 +25,7 @@ const PortfolioAnalyzer = ({ fundName, onClose }) => {
         setResult(null);
 
         const formData = new FormData();
-        formData.append('fund_name', fundName);
+        formData.append('fund_id', fundId);
         // No longer sending amount/date manually
 
         try {
@@ -68,7 +68,9 @@ const PortfolioAnalyzer = ({ fundName, onClose }) => {
                                 <Calculator className="w-5 h-5 text-accent" />
                                 Portfolio Analysis
                             </h2>
-                            <p className="text-sm text-zinc-400 mt-1">{fundName}</p>
+                            <p className="text-sm text-zinc-400 mt-1">
+                                {result?.nickname || result?.fund_name || "Loading..."}
+                            </p>
                         </div>
                         <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">
                             <X className="w-6 h-6" />
@@ -118,12 +120,12 @@ const PortfolioAnalyzer = ({ fundName, onClose }) => {
                                     {/* 1D Returns */}
                                     <div className="flex flex-col items-center">
                                         <span className="text-xs text-zinc-500 mb-1 font-medium tracking-wide">1D returns</span>
-                                        <div className={`flex items-center gap-1.5 ${result.day_pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                            <span className="text-sm font-bold">
+                                        <div className={`flex flex-col items-center leading-tight ${result.day_pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                            <span className="text-sm font-bold whitespace-nowrap">
                                                 {result.day_pnl >= 0 ? '+' : ''}₹{Math.abs(result.day_pnl)}
                                             </span>
-                                            <span className="text-xs font-medium opacity-80">
-                                                ({Math.abs(result.day_pnl_pct)}%)
+                                            <span className="text-xs font-medium opacity-80 whitespace-nowrap">
+                                                ({result.day_pnl >= 0 ? '+' : ''}{result.day_pnl_pct}%)
                                             </span>
                                         </div>
                                     </div>
@@ -131,12 +133,12 @@ const PortfolioAnalyzer = ({ fundName, onClose }) => {
                                     {/* Total Returns */}
                                     <div className="flex flex-col items-end">
                                         <span className="text-xs text-zinc-500 mb-1 font-medium tracking-wide">Total returns</span>
-                                        <div className={`flex items-center gap-1.5 ${result.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                            <span className="text-sm font-bold">
+                                        <div className={`flex flex-col items-end leading-tight ${result.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                            <span className="text-sm font-bold whitespace-nowrap">
                                                 {result.pnl >= 0 ? '+' : ''}₹{Math.abs(result.pnl)}
                                             </span>
-                                            <span className="text-xs font-medium opacity-80">
-                                                ({result.pnl_pct}%)
+                                            <span className="text-xs font-medium opacity-80 whitespace-nowrap">
+                                                ({result.pnl >= 0 ? '+' : ''}{result.pnl_pct}%)
                                             </span>
                                         </div>
                                     </div>

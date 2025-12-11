@@ -171,13 +171,15 @@ def get_nav_at_date(scheme_code, target_date_str):
         print(f"Error fetching historical NAV: {e}")            
     return None
 
-def calculate_pnl(fund_name, investment, input_date):
+def calculate_pnl(fund_id, investment=None, input_date=None):
     """
     Calculates P&L based on Investment Amount and Date.
     """
-    doc = get_holdings(fund_name)
+    doc = get_holdings(fund_id)
     if not doc:
         return {"error": "Fund not found."}
+    
+    fund_name = doc.get("fund_name", "Unknown Fund")
     
     scheme_code = doc.get("scheme_code")
     if not scheme_code:
@@ -209,9 +211,8 @@ def calculate_pnl(fund_name, investment, input_date):
     is_live = False
     
     # Check if we have holdings to verify against
-    holdings_doc = get_holdings(fund_name)
-    if holdings_doc and "holdings" in holdings_doc:
-        holdings = holdings_doc["holdings"]
+    if doc and "holdings" in doc:
+        holdings = doc["holdings"]
         
         total_pchange_contribution = 0.0
         total_weight_checked = 0.0
@@ -328,6 +329,7 @@ def calculate_pnl(fund_name, investment, input_date):
     final_note = purchase_note + (live_nav_note if is_live else f" | Official NAV ({nav_date})")
 
     return {
+        "fund_id": fund_id,
         "fund_name": fund_name,
         "invested_amount": investment,
         "invested_date": input_date,
@@ -340,7 +342,8 @@ def calculate_pnl(fund_name, investment, input_date):
         "day_pnl": round(day_pnl, 2),
         "day_pnl_pct": round(day_pnl_pct, 2),
         "last_updated": "Live" if is_live else nav_date,
-        "note": final_note
+        "note": final_note,
+        "nickname": doc.get("nickname")
     }
 
 def search_scheme_code(query):
@@ -366,7 +369,7 @@ def get_ticker_from_isin(isin):
     """
     return isin_to_symbol_nse(isin)
 
-def save_holdings_to_mongo(fund_name, excel_file, scheme_code=None, invested_amount=None, invested_date=None):
+def save_holdings_to_mongo(fund_name, excel_file, scheme_code=None, invested_amount=None, invested_date=None, nickname=None):
     # 1. Read Excel without headers first to find the header row
     try:
         # Read full file to find header
@@ -483,7 +486,7 @@ def save_holdings_to_mongo(fund_name, excel_file, scheme_code=None, invested_amo
          return {"error": err_msg}
 
     # 7. Save to DB
-    save_holdings(fund_name, holdings_list, scheme_code, invested_amount, invested_date)
+    save_holdings(fund_name, holdings_list, scheme_code, invested_amount, invested_date, nickname)
 
     return {
         "message": f"Holdings saved for {fund_name}",

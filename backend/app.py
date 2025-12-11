@@ -42,6 +42,7 @@ async def upload(
     investment_type: str = Form(None), # 'lumpsum' or 'sip'
     invested_amount: str = Form(None), # Changed to str to handle empty strings
     invested_date: str = Form(None), # YYYY-MM-DD
+    nickname: str = Form(None), # Optional nickname
 ):
     # 1. Attempt to resolve Scheme Code if missing
     if not scheme_code:
@@ -52,7 +53,7 @@ async def upload(
             print(f"Resolved {fund_name} -> {scheme_code}")
 
     # 2. Save Holdings
-    save_result = save_holdings_to_mongo(fund_name, file, scheme_code, invested_amount, invested_date)
+    save_result = save_holdings_to_mongo(fund_name, file, scheme_code, invested_amount, invested_date, nickname)
     
     # 3. If investment details provided, Calculate P&L immediately
     analysis = None
@@ -80,7 +81,7 @@ async def upload(
 
 @app.post("/analyze-portfolio")
 async def analyze_portfolio(
-    fund_name: str = Form(...),
+    fund_id: str = Form(...),
     investment_amount: float = Form(None),
     investment_date: str = Form(None) # YYYY-MM-DD
 ):
@@ -88,14 +89,14 @@ async def analyze_portfolio(
     Analyzes P&L for an existing fund in the DB.
     Triggers Live NAV estimation if market is open/data available.
     """
-    result = calculate_pnl(fund_name, investment_amount, investment_date)
+    result = calculate_pnl(fund_id, investment_amount, investment_date)
     return result
 
-@app.delete("/funds/{fund_name}")
-def remove_fund(fund_name: str):
-    success = delete_fund(fund_name)
+@app.delete("/funds/{fund_id}")
+def remove_fund(fund_id: str):
+    success = delete_fund(fund_id)
     if success:
-        return {"message": f"Deleted {fund_name}"}
+        return {"message": f"Deleted fund {fund_id}"}
     return {"error": "Fund not found"}, 404
 
 if __name__ == "__main__":

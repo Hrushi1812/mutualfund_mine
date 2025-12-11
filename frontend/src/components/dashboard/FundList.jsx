@@ -18,11 +18,11 @@ const FundList = ({ onSelect }) => {
         }
     };
 
-    const handleDelete = async (e, fundName) => {
+    const handleDelete = async (e, fundId, fundName) => {
         e.stopPropagation(); // Prevent opening the analyzer
         if (window.confirm(`Are you sure you want to delete "${fundName}"?`)) {
             try {
-                await api.delete(`/funds/${fundName}`);
+                await api.delete(`/funds/${fundId}`);
                 fetchFunds(); // Refresh list
             } catch (error) {
                 console.error("Failed to delete fund:", error);
@@ -56,16 +56,23 @@ const FundList = ({ onSelect }) => {
                     <p className="text-zinc-400">No portfolios found. Upload one to get started.</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {funds.map((fund, index) => (
                         <div
-                            key={index}
-                            onClick={() => onSelect && onSelect(fund.fund_name)}
+                            key={fund.id}
+                            onClick={() => onSelect && onSelect(fund.id)}
                             className="bg-white/5 border border-white/5 hover:border-accent/50 p-4 rounded-xl transition-all cursor-pointer group active:scale-[0.98] relative"
                         >
                             <div className="flex justify-between items-center">
                                 <div className="flex-1 overflow-hidden">
-                                    <h3 className="font-semibold text-foreground truncate pr-8">{fund.fund_name}</h3>
+                                    <h3 className="font-semibold text-foreground truncate pr-8">
+                                        {fund.nickname || fund.fund_name}
+                                    </h3>
+                                    {fund.nickname && (
+                                        <p className="text-xs text-zinc-500 truncate mb-1">
+                                            {fund.fund_name}
+                                        </p>
+                                    )}
                                     <p className="text-xs text-zinc-400 mt-1 flex items-center gap-2">
                                         {fund.invested_amount ? (
                                             <>
@@ -82,7 +89,7 @@ const FundList = ({ onSelect }) => {
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button
-                                        onClick={(e) => handleDelete(e, fund.fund_name)}
+                                        onClick={(e) => handleDelete(e, fund.id, fund.fund_name)}
                                         className="p-2 hover:bg-red-500/20 text-zinc-500 hover:text-red-500 rounded-lg transition-colors z-10"
                                         title="Delete Portfolio"
                                     >

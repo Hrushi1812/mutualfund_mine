@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.errors import InvalidURI, ConfigurationError
+from bson import ObjectId
 
 load_dotenv()
 
@@ -31,7 +32,7 @@ collection = db[MONGO_COLLECTION]
 
 
 
-def save_holdings(fund_name, holdings_list, scheme_code=None, invested_amount=None, invested_date=None):
+def save_holdings(fund_name, holdings_list, scheme_code=None, invested_amount=None, invested_date=None, nickname=None):
     data = {
         "fund_name": fund_name,
         "holdings": holdings_list,
@@ -43,32 +44,52 @@ def save_holdings(fund_name, holdings_list, scheme_code=None, invested_amount=No
         data["invested_amount"] = invested_amount
     if invested_date:
         data["invested_date"] = invested_date
+    if nickname:
+        data["nickname"] = nickname
         
+    # Composite key for uniqueness: Name + Amount + Date to allow duplicates of name
+    query = {
+        "fund_name": fund_name,
+        "invested_amount": invested_amount,
+        "invested_date": invested_date
+    }
+
     collection.update_one(
-        {"fund_name": fund_name},
+        query,
         {"$set": data},
         upsert=True,
     )
 
 
-def get_holdings(fund_name):
-    doc = collection.find_one({"fund_name": fund_name})
-    # Return the full doc so we can access scheme_code
-    return doc
+def get_holdings(fund_id_str):
+    try:
+        if isinstance(fund_id_str, str):
+            oid = ObjectId(fund_id_str)
+        else:
+            oid = fund_id_str
+        doc = collection.find_one({"_id": oid})
+        return doc
+    except:
+        return None
 
 
 def list_funds():
-    cursor = collection.find({}, {"fund_name": 1, "invested_amount": 1, "invested_date": 1, "scheme_code": 1})
+    cursor = collection.find({}, {"fund_name": 1, "invested_amount": 1, "invested_date": 1, "scheme_code": 1, "nickname": 1})
     funds = []
     for doc in cursor:
         funds.append({
+            "id": str(doc["_id"]),
             "fund_name": doc.get("fund_name"),
             "invested_amount": doc.get("invested_amount"),
             "invested_date": doc.get("invested_date"),
-            "scheme_code": doc.get("scheme_code")
+            "scheme_code": doc.get("scheme_code"),
+            "nickname": doc.get("nickname")
         })
     return funds
 
-def delete_fund(fund_name):
-    result = collection.delete_one({"fund_name": fund_name})
-    return result.deleted_count > 0
+def delete_fund(fund_id_str):
+    try:
+        res = collection.delete_one({"_id": ObjectId(fund_id_str)})
+        return res.deleted_count > 0
+    except:
+        return False

@@ -64,7 +64,7 @@ const Dashboard = () => {
             {/* Analyzer Modal */}
             {selectedFund && (
                 <PortfolioAnalyzer
-                    fundName={selectedFund}
+                    fundId={selectedFund}
                     onClose={() => setSelectedFund(null)}
                 />
             )}

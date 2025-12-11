@@ -7,6 +7,7 @@ const UploadHoldings = ({ onUploadSuccess }) => {
     const [mode, setMode] = useState('lumpsum'); // 'lumpsum' | 'sip'
     const [file, setFile] = useState(null);
     const [fundName, setFundName] = useState('');
+    const [nickname, setNickname] = useState('');
     const [investedAmount, setInvestedAmount] = useState('');
     const [investedDate, setInvestedDate] = useState('');
 
@@ -44,6 +45,7 @@ const UploadHoldings = ({ onUploadSuccess }) => {
 
         if (investedAmount) formData.append('invested_amount', investedAmount);
         if (investedDate) formData.append('invested_date', investedDate);
+        if (nickname) formData.append('nickname', nickname);
 
         try {
             await api.post('/upload-holdings/', formData, {
@@ -54,6 +56,7 @@ const UploadHoldings = ({ onUploadSuccess }) => {
             // Reset form
             setFile(null);
             setFundName('');
+            setNickname('');
             setInvestedAmount('');
             setInvestedDate('');
         } catch (error) {
@@ -105,6 +108,18 @@ const UploadHoldings = ({ onUploadSuccess }) => {
                         value={fundName}
                         onChange={(e) => setFundName(e.target.value)}
                         placeholder="e.g. My Bluechip Portfolio"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors"
+                    />
+                </div>
+
+                {/* Nickname (Optional) */}
+                <div>
+                    <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Nickname (Optional)</label>
+                    <input
+                        type="text"
+                        value={nickname}
+                        onChange={(e) => setNickname(e.target.value)}
+                        placeholder="e.g. Retirement Fund"
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors"
                     />
                 </div>
