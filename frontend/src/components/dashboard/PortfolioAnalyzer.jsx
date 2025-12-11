@@ -24,12 +24,11 @@ const PortfolioAnalyzer = ({ fundId, onClose }) => {
         setError(null);
         setResult(null);
 
-        const formData = new FormData();
-        formData.append('fund_id', fundId);
-        // No longer sending amount/date manually
+        // Send JSON payload
+        const payload = { fund_id: fundId };
 
         try {
-            const response = await api.post('/analyze-portfolio', formData);
+            const response = await api.post('/analyze-portfolio', payload);
             if (response.data.error) {
                 setError(response.data.error);
             } else if (response.data && response.data.pnl !== undefined) {

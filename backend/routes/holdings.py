@@ -62,8 +62,8 @@ async def upload(
 
     analysis = None
         
-    if amount_float and invested_date:
-        analysis = nav_service.calculate_pnl(fund_name, user_id, amount_float, invested_date)
+    if amount_float and invested_date and save_result.get("id"):
+        analysis = nav_service.calculate_pnl(save_result["id"], user_id, amount_float, invested_date)
 
     return {
         "upload_status": save_result,

@@ -8,6 +8,7 @@ from typing import List, Optional
 
 from datetime import datetime
 from utils.common import NSE_HEADERS, NSE_CSV_URL
+from utils.date_utils import format_date_for_api
 from core.logging import get_logger
 
 logger = get_logger("HoldingsService")
@@ -212,6 +213,16 @@ class HoldingsService:
         if not holdings_list:
             return {"error": "No valid holdings resolved."}
 
+        # 5.5 Auto-lookup Scheme Code if missing
+        if not scheme_code:
+            logger.info(f"Scheme code not provided for '{fund_name}'. Attempting auto-lookup...")
+            code = search_scheme_code(fund_name)
+            if code:
+                scheme_code = code
+                logger.info(f"Found scheme code: {scheme_code}")
+            else:
+                logger.warning(f"Could not find scheme code for '{fund_name}'")
+
         # 6. Save to DB (Strict Schema)
         from models.db_schemas import HoldingsDocument, HoldingItem
         from datetime import datetime
@@ -250,10 +261,15 @@ class HoldingsService:
         # Dump model to dict for Mongo
         holdings_collection.update_one(query, {"$set": doc_model.dict()}, upsert=True)
         
+        # Fetch the ID
+        saved_doc = holdings_collection.find_one(query)
+        saved_id = str(saved_doc["_id"]) if saved_doc else None
+
         return {
             "message": f"Holdings saved for {fund_name}",
             "count": len(holdings_list),
-            "unresolved_count": len(unresolved)
+            "unresolved_count": len(unresolved),
+            "id": saved_id
         }
 
 holdings_service = HoldingsService()
