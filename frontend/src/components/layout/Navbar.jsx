@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { Menu, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../../context/AuthContext";
 
 const Navbar = () => {
     const [scrolled, setScrolled] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
     const navigate = useNavigate();
+    const { isAuthenticated, logout } = useContext(AuthContext);
 
     useEffect(() => {
         const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -21,6 +23,11 @@ const Navbar = () => {
 
     const handleGetStarted = () => {
         navigate('/login');
+    };
+
+    const handleLogout = () => {
+        logout();
+        navigate('/');
     };
 
     return (
@@ -44,12 +51,29 @@ const Navbar = () => {
                             {link.name}
                         </a>
                     ))}
-                    <button
-                        onClick={handleGetStarted}
-                        className="bg-white text-black px-5 py-2 rounded-full font-medium hover:bg-gray-100 transition-colors text-sm"
-                    >
-                        Get Started
-                    </button>
+                    {isAuthenticated ? (
+                        <div className="flex items-center space-x-4">
+                            <button
+                                onClick={() => navigate('/dashboard')}
+                                className="bg-white/10 text-white px-5 py-2 rounded-full font-medium hover:bg-white/20 transition-colors text-sm"
+                            >
+                                Dashboard
+                            </button>
+                            <button
+                                onClick={handleLogout}
+                                className="bg-red-500/80 text-white px-5 py-2 rounded-full font-medium hover:bg-red-600/80 transition-colors text-sm"
+                            >
+                                Logout
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={handleGetStarted}
+                            className="bg-white text-black px-5 py-2 rounded-full font-medium hover:bg-gray-100 transition-colors text-sm"
+                        >
+                            Get Started
+                        </button>
+                    )}
                 </div>
 
                 {/* Mobile Toggle */}

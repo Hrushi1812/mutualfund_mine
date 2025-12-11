@@ -171,11 +171,11 @@ def get_nav_at_date(scheme_code, target_date_str):
         print(f"Error fetching historical NAV: {e}")            
     return None
 
-def calculate_pnl(fund_id, investment=None, input_date=None):
+def calculate_pnl(fund_id, user_id, investment=None, input_date=None):
     """
     Calculates P&L based on Investment Amount and Date.
     """
-    doc = get_holdings(fund_id)
+    doc = get_holdings(fund_id, user_id)
     if not doc:
         return {"error": "Fund not found."}
     
@@ -369,7 +369,7 @@ def get_ticker_from_isin(isin):
     """
     return isin_to_symbol_nse(isin)
 
-def save_holdings_to_mongo(fund_name, excel_file, scheme_code=None, invested_amount=None, invested_date=None, nickname=None):
+def save_holdings_to_mongo(fund_name, excel_file, user_id, scheme_code=None, invested_amount=None, invested_date=None, nickname=None):
     # 1. Read Excel without headers first to find the header row
     try:
         # Read full file to find header
@@ -486,7 +486,7 @@ def save_holdings_to_mongo(fund_name, excel_file, scheme_code=None, invested_amo
          return {"error": err_msg}
 
     # 7. Save to DB
-    save_holdings(fund_name, holdings_list, scheme_code, invested_amount, invested_date, nickname)
+    save_holdings(fund_name, holdings_list, user_id, scheme_code, invested_amount, invested_date, nickname)
 
     return {
         "message": f"Holdings saved for {fund_name}",

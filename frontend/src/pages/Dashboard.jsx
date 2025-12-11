@@ -1,16 +1,19 @@
-import React, { useState } from 'react';
-import { LayoutDashboard, LogOut, PieChart } from 'lucide-react';
+import React, { useState, useContext } from 'react';
+import { LayoutDashboard, LogOut, PieChart, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import UploadHoldings from '../components/dashboard/UploadHoldings';
 import FundList from '../components/dashboard/FundList';
 import PortfolioAnalyzer from '../components/dashboard/PortfolioAnalyzer';
+import { AuthContext } from '../context/AuthContext';
 
 const Dashboard = () => {
     const navigate = useNavigate();
+    const { user, logout } = useContext(AuthContext);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [selectedFund, setSelectedFund] = useState(null);
 
     const handleLogout = () => {
+        logout();
         navigate('/');
     };
 
@@ -26,13 +29,21 @@ const Dashboard = () => {
                         <h1 className="text-xl font-bold tracking-tight">Mutual Fund Tracker</h1>
                     </div>
 
-                    <button
-                        onClick={handleLogout}
-                        className="flex items-center gap-2 text-sm font-medium text-zinc-400 hover:text-white transition-colors"
-                    >
-                        <LogOut className="w-4 h-4" />
-                        Sign Out
-                    </button>
+                    <div className="flex items-center gap-6">
+                        {user && (
+                            <div className="flex items-center gap-2 text-sm font-medium text-white/80 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
+                                <User className="w-4 h-4 text-brand-accent" />
+                                <span>Hi, {user.username}</span>
+                            </div>
+                        )}
+                        <button
+                            onClick={handleLogout}
+                            className="flex items-center gap-2 text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+                        >
+                            <LogOut className="w-4 h-4" />
+                            Sign Out
+                        </button>
+                    </div>
                 </div>
             </header>
 
