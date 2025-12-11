@@ -49,8 +49,16 @@ const FundList = ({ onSelect }) => {
                         >
                             <div className="flex justify-between items-center">
                                 <div className="flex-1 overflow-hidden">
-                                    <h3 className="font-semibold text-foreground truncate pr-8">
+                                    <h3 className="font-semibold text-foreground truncate pr-8 flex items-center gap-2">
                                         {fund.nickname || fund.fund_name}
+                                        {fund.is_stale && (
+                                            <div className="group/tooltip relative">
+                                                <AlertCircle className="w-4 h-4 text-amber-500" />
+                                                <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2 py-1 text-xs bg-zinc-800 text-white rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
+                                                    Update Required
+                                                </span>
+                                            </div>
+                                        )}
                                     </h3>
                                     {fund.nickname && (
                                         <p className="text-xs text-zinc-500 truncate mb-1">

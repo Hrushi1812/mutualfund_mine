@@ -62,17 +62,48 @@ def search_scheme_code(query):
 
 class HoldingsService:
     @staticmethod
+    def _is_portfolio_stale(upload_date: datetime) -> bool:
+        """
+        Determines if a portfolio is stale based on SEBI's 10-day monthly disclosure rule.
+        Rule: On the 11th of Month M, we expect an upload from Month M.
+        """
+        if not upload_date: return True
+        
+        now = datetime.utcnow() # Using UTC for consistency
+        cutoff_day = 10
+        
+        if now.day > cutoff_day:
+            # Past the 10th: Must have upload from CURRENT month
+            return not (upload_date.month == now.month and upload_date.year == now.year)
+        else:
+            # Before the 10th: Upload from CURRENT OR PREVIOUS month is fine
+            # Check if upload is from current month
+            if upload_date.month == now.month and upload_date.year == now.year:
+                return False
+                
+            # Check if upload is from previous month
+            first_of_this_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            last_month_end = first_of_this_month - timedelta(days=1)
+            
+            return not (upload_date.month == last_month_end.month and upload_date.year == last_month_end.year)
+
+    @staticmethod
     def list_funds(user_id):
-        cursor = holdings_collection.find({"user_id": user_id}, {"fund_name": 1, "invested_amount": 1, "invested_date": 1, "scheme_code": 1, "nickname": 1})
+        cursor = holdings_collection.find({"user_id": user_id}, {"fund_name": 1, "invested_amount": 1, "invested_date": 1, "scheme_code": 1, "nickname": 1, "created_at": 1})
         funds = []
         for doc in cursor:
+            created_at = doc.get("created_at")
+            is_stale = HoldingsService._is_portfolio_stale(created_at)
+            
             funds.append({
                 "id": str(doc["_id"]),
                 "fund_name": doc.get("fund_name"),
                 "invested_amount": doc.get("invested_amount"),
                 "invested_date": doc.get("invested_date"),
                 "scheme_code": doc.get("scheme_code"),
-                "nickname": doc.get("nickname")
+                "nickname": doc.get("nickname"),
+                "is_stale": is_stale,
+                "created_at": format_date_for_api(created_at) if created_at else None
             })
         return funds
 
@@ -81,6 +112,8 @@ class HoldingsService:
         try:
             doc = holdings_collection.find_one({"_id": ObjectId(fund_id_str)})
             if doc and doc.get("user_id") == user_id:
+                # Add stale status to single view as well if needed
+                doc["is_stale"] = HoldingsService._is_portfolio_stale(doc.get("created_at"))
                 return doc
             return None
         except:
