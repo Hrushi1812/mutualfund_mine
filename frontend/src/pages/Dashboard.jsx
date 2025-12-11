@@ -9,7 +9,6 @@ import { AuthContext } from '../context/AuthContext';
 const Dashboard = () => {
     const navigate = useNavigate();
     const { user, logout } = useContext(AuthContext);
-    const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [selectedFund, setSelectedFund] = useState(null);
 
     const handleLogout = () => {
@@ -59,14 +58,11 @@ const Dashboard = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                     {/* Left Column (Upload & Lists) - Weighted larger */}
                     <div className="lg:col-span-12 space-y-8">
-                        <UploadHoldings onUploadSuccess={() => setRefreshTrigger(p => p + 1)} />
+                        <UploadHoldings />
 
                         {/* We'll wrap FundList in a similar card style later or now */}
                         <div className="bg-white/5 border border-white/5 rounded-2xl p-6 shadow-xl">
-                            <FundList
-                                key={refreshTrigger}
-                                onSelect={(fund) => setSelectedFund(fund)}
-                            />
+                            <FundList onSelect={(fund) => setSelectedFund(fund)} />
                         </div>
                     </div>
                 </div>

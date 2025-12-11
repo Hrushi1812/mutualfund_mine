@@ -1,9 +1,24 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from routes import auth, holdings, portfolio
 from db import client
+from core.logging import setup_logging, get_logger
+
+# 1. Setup Logging
+setup_logging()
+logger = get_logger("app")
 
 app = FastAPI(title="Mutual Fund NAV Estimator API")
+
+# 2. Global Exception Handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled Exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error. Please check logs for details."},
+    )
 
 # CORS
 app.add_middleware(
@@ -19,9 +34,9 @@ app.add_middleware(
 def startup_db_client():
     try:
         client.admin.command('ismaster')
-        print("\n✅ Connected to MongoDB successfully!\n")
+        logger.info("Connected to MongoDB successfully!")
     except Exception as e:
-        print(f"\n❌ MongoDB Startup Error: {e}\n")
+        logger.critical(f"MongoDB Startup Error: {e}")
 
 # Routes
 app.include_router(auth.router)

@@ -7,6 +7,9 @@ from fastapi.security import OAuth2PasswordBearer
 from db import users_collection
 from core.config import settings
 from models.schemas import TokenData, UserCreate
+from core.logging import get_logger
+
+logger = get_logger("AuthService")
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -39,25 +42,35 @@ class AuthService:
     @staticmethod
     def create_user(user: UserCreate):
         if AuthService.get_user(user.username):
+            logger.warning(f"Registration failed: Username '{user.username}' already exists.")
             raise HTTPException(status_code=400, detail="Username already registered")
         
+        from models.db_schemas import UserDocument
+        
         hashed_password = AuthService.get_password_hash(user.password)
-        new_user = {
-            "username": user.username,
-            "email": user.email,
-            "hashed_password": hashed_password,
-            "created_at": datetime.utcnow()
-        }
-        users_collection.insert_one(new_user)
-        return new_user
+        
+        # Create strict document
+        user_doc = UserDocument(
+            username=user.username,
+            email=user.email,
+            hashed_password=hashed_password,
+            created_at=datetime.utcnow()
+        )
+        
+        users_collection.insert_one(user_doc.dict())
+        logger.info(f"New user registered: {user.username}")
+        return user_doc.dict()
 
     @staticmethod
     def authenticate_user(username, password):
         user = AuthService.get_user(username)
         if not user:
+            logger.warning(f"Login failed: Username '{username}' not found.")
             return None
         if not AuthService.verify_password(password, user["hashed_password"]):
+            logger.warning(f"Login failed: Invalid password for '{username}'.")
             return None
+        logger.info(f"User logged in: {username}")
         return user
 
 auth_service = AuthService()

@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { Upload, Calendar, FileSpreadsheet, CheckCircle2, AlertCircle, IndianRupee, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../api';
+import { PortfolioContext } from '../../context/PortfolioContext';
 
-const UploadHoldings = ({ onUploadSuccess }) => {
+const UploadHoldings = () => {
+    const { fetchFunds } = useContext(PortfolioContext);
     const [mode, setMode] = useState('lumpsum'); // 'lumpsum' | 'sip'
     const [file, setFile] = useState(null);
     const [fundName, setFundName] = useState('');
@@ -39,9 +41,6 @@ const UploadHoldings = ({ onUploadSuccess }) => {
         formData.append('fund_name', fundName);
         formData.append('file', file);
         formData.append('investment_type', mode);
-        formData.append('fund_name', fundName);
-        formData.append('file', file);
-        formData.append('investment_type', mode);
 
         if (investedAmount) formData.append('invested_amount', investedAmount);
         if (investedDate) formData.append('invested_date', investedDate);
@@ -52,7 +51,11 @@ const UploadHoldings = ({ onUploadSuccess }) => {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             setMessage({ type: 'success', text: 'Portfolio uploaded successfully!' });
-            if (onUploadSuccess) onUploadSuccess();
+
+            // Refresh global list
+            fetchFunds();
+
+            // Reset form
             // Reset form
             setFile(null);
             setFundName('');

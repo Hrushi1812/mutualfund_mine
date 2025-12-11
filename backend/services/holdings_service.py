@@ -8,6 +8,9 @@ from typing import List, Optional
 
 from datetime import datetime
 from utils.common import NSE_HEADERS, NSE_CSV_URL
+from core.logging import get_logger
+
+logger = get_logger("HoldingsService")
 
 session = requests.Session()
 session.headers.update(NSE_HEADERS)
@@ -20,7 +23,7 @@ def load_nse_csv():
         f = StringIO(r.text)
         return list(csv.DictReader(f))
     except Exception as e:
-        print(f"Error downloading NSE CSV: {e}")
+        logger.error(f"Error downloading NSE CSV: {e}")
         return []
 
 def isin_to_symbol_nse(isin, nse_table=None):
@@ -52,7 +55,7 @@ def search_scheme_code(query):
              if data and len(data) > 0:
                  return str(data[0]["schemeCode"])
     except Exception as e:
-        print(f"Search error: {e}")
+        logger.warning(f"Search error for '{query}': {e}")
     return None
 
 # --- Main Service Class ---
@@ -99,24 +102,31 @@ class HoldingsService:
         except Exception as e:
             return {"error": f"Failed to read Excel: {str(e)}"}
 
-        # 2. Find Header
+        # 2. Find Header (Robust)
         header_idx = None
-        for idx, row in df_raw.iterrows():
+        
+        # Scan first 50 rows only to find the header
+        # We look for a row that contains BOTH "ISIN" and some form of "NAME"/ "DESCRIPTION"
+        for idx, row in df_raw.head(50).iterrows():
             row_str = row.astype(str).str.upper().tolist()
-            if any(x.strip() in ["ISIN", "ISIN CODE", "ISIN NO"] for x in row_str if isinstance(x, str)):
+            
+            has_isin = any(x.strip() in ["ISIN", "ISIN CODE", "ISIN NO"] for x in row_str if isinstance(x, str))
+            has_name = any(x.strip() in ["SCHEME NAME", "FUND NAME", "DESCRIPTION", "NAME", "SCHEME"] for x in row_str if isinstance(x, str))
+            
+            if has_isin and has_name:
                 header_idx = idx
                 break
         
         if header_idx is None:
-             # Fallback sloppy search
-             for idx, row in df_raw.iterrows():
+             # Fallback: Just look for ISIN if we strictly need it
+             for idx, row in df_raw.head(50).iterrows():
                  row_str = row.astype(str).str.upper().tolist()
                  if any("ISIN" in x for x in row_str if isinstance(x, str)):
                      header_idx = idx
                      break
         
         if header_idx is None:
-            return {"error": "Could not find 'ISIN' column header."}
+            return {"error": "Could not detect header row. Ensure file has 'ISIN' and 'Scheme Name' columns."}
 
         excel_file.file.seek(0)
         df = pd.read_excel(excel_file.file, header=header_idx)
@@ -169,25 +179,43 @@ class HoldingsService:
         if not holdings_list:
             return {"error": "No valid holdings resolved."}
 
-        # 6. Save to DB
-        data = {
-            "fund_name": fund_name,
-            "holdings": holdings_list,
-            "user_id": user_id,
-            "last_updated": True
-        }
-        if scheme_code: data["scheme_code"] = scheme_code
-        if invested_amount: data["invested_amount"] = invested_amount
-        if invested_date: data["invested_date"] = invested_date
-        if nickname: data["nickname"] = nickname
+        # 6. Save to DB (Strict Schema)
+        from models.db_schemas import HoldingsDocument, HoldingItem
+        from datetime import datetime
         
+        # Validated List
+        validated_holdings = []
+        for h in holdings_list:
+             validated_holdings.append(HoldingItem(**h))
+
+        doc_data = {
+            "fund_name": fund_name,
+            "user_id": user_id,
+            "scheme_code": scheme_code,
+            "invested_amount": invested_amount,
+            "invested_date": invested_date,
+            "nickname": nickname,
+            "holdings": validated_holdings,
+            "last_updated": True,
+            "created_at": datetime.utcnow()
+        }
+        
+        # Validate entire document
+        # If this fails, it means we have bad internal data logic
+        try:
+             doc_model = HoldingsDocument(**doc_data)
+        except Exception as e:
+             return {"error": f"Schema Validation Failed: {e}"}
+
+        # Upsert
         query = {
             "fund_name": fund_name,
             "user_id": user_id,
             "invested_amount": invested_amount,
             "invested_date": invested_date
         }
-        holdings_collection.update_one(query, {"$set": data}, upsert=True)
+        # Dump model to dict for Mongo
+        holdings_collection.update_one(query, {"$set": doc_model.dict()}, upsert=True)
         
         return {
             "message": f"Holdings saved for {fund_name}",

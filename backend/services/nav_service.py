@@ -4,6 +4,9 @@ import requests
 from services.holdings_service import holdings_service, session
 from utils.date_utils import is_market_open, get_current_ist_time, is_trading_day, get_previous_business_day, format_date_for_api, parse_date_from_str, MARKET_OPEN_TIME
 from utils.common import NSE_API_URL
+from core.logging import get_logger
+
+logger = get_logger("NavService")
 
 class NavService:
     @staticmethod
@@ -36,7 +39,7 @@ class NavService:
                              })
                         return results if limit > 1 else results[0]
         except Exception as e:
-            print(f"Error fetching NAV for {scheme_code}: {e}")
+            logger.error(f"Error fetching NAV for {scheme_code}: {e}")
         return [] if limit > 1 else None
 
     @staticmethod
@@ -66,7 +69,7 @@ class NavService:
                 except ValueError: continue
                 
         except Exception as e:
-            print(f"Error fetching historical NAV: {e}")            
+            logger.error(f"Error fetching historical NAV: {e}")            
         return None
 
     @staticmethod

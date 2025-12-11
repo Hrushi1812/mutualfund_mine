@@ -1,39 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useContext } from 'react';
 import { Database, RefreshCw, ChevronRight, Trash2, AlertCircle } from 'lucide-react';
 import api from '../../api';
+import { PortfolioContext } from '../../context/PortfolioContext';
 
 const FundList = ({ onSelect }) => {
-    const [funds, setFunds] = useState([]);
-    const [loading, setLoading] = useState(false);
-
-    const fetchFunds = async () => {
-        setLoading(true);
-        try {
-            const response = await api.get('/funds/');
-            setFunds(response.data.funds_available);
-        } catch (error) {
-            console.error("Error fetching funds:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    const { funds, loading, fetchFunds } = useContext(PortfolioContext);
 
     const handleDelete = async (e, fundId, fundName) => {
         e.stopPropagation(); // Prevent opening the analyzer
         if (window.confirm(`Are you sure you want to delete "${fundName}"?`)) {
             try {
                 await api.delete(`/funds/${fundId}`);
-                fetchFunds(); // Refresh list
+                fetchFunds(); // Refresh globally
             } catch (error) {
                 console.error("Failed to delete fund:", error);
                 alert("Failed to delete fund. Please try again.");
             }
         }
     };
-
-    useEffect(() => {
-        fetchFunds();
-    }, []);
 
     return (
         <div>
