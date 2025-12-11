@@ -107,33 +107,49 @@ const PortfolioAnalyzer = ({ fundName, onClose }) => {
                         ) : result ? (
                             // Results View
                             <div className="space-y-6">
-                                {/* Key Metrics Grid */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                                        <p className="text-xs text-zinc-400 mb-1">Current Value</p>
-                                        <p className="text-xl font-bold text-white">₹{result.current_value}</p>
+                                {/* Key Metrics Grid - Creative Redesign */}
+                                <div className="grid grid-cols-3 gap-4 mb-6">
+                                    {/* Invested */}
+                                    <div className="flex flex-col">
+                                        <span className="text-xs text-zinc-500 mb-1 font-medium tracking-wide">Invested value</span>
+                                        <span className="text-lg font-bold text-white tracking-tight">₹{result.invested_amount}</span>
                                     </div>
-                                    <div className={`p-4 bg-white/5 rounded-2xl border border-white/5 ${result.pnl >= 0 ? 'border-l-green-500/50' : 'border-l-red-500/50'}`}>
-                                        <p className="text-xs text-zinc-400 mb-1">Total P&L</p>
-                                        <div className={`flex items-baseline gap-1 ${result.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                            <span className="text-xl font-bold">{result.pnl >= 0 ? '+' : ''}₹{result.pnl}</span>
+
+                                    {/* 1D Returns */}
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-xs text-zinc-500 mb-1 font-medium tracking-wide">1D returns</span>
+                                        <div className={`flex items-center gap-1.5 ${result.day_pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                            <span className="text-sm font-bold">
+                                                {result.day_pnl >= 0 ? '+' : ''}₹{Math.abs(result.day_pnl)}
+                                            </span>
+                                            <span className="text-xs font-medium opacity-80">
+                                                ({Math.abs(result.day_pnl_pct)}%)
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Total Returns */}
+                                    <div className="flex flex-col items-end">
+                                        <span className="text-xs text-zinc-500 mb-1 font-medium tracking-wide">Total returns</span>
+                                        <div className={`flex items-center gap-1.5 ${result.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                            <span className="text-sm font-bold">
+                                                {result.pnl >= 0 ? '+' : ''}₹{Math.abs(result.pnl)}
+                                            </span>
+                                            <span className="text-xs font-medium opacity-80">
+                                                ({result.pnl_pct}%)
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Detailed Breakdown */}
-                                <div className="space-y-3">
-                                    <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl">
-                                        <span className="text-sm text-zinc-400">Return %</span>
-                                        <span className={`font-mono font-bold ${result.pnl_pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                            {result.pnl_pct}%
-                                        </span>
+                                {/* Secondary Info Card */}
+                                <div className="bg-white/5 rounded-2xl p-4 border border-white/5 space-y-3">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-zinc-400">Current Value</span>
+                                        <span className="font-mono font-bold text-xl text-white">₹{result.current_value}</span>
                                     </div>
-                                    <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl">
-                                        <span className="text-sm text-zinc-400">Invested Amount</span>
-                                        <span className="font-mono text-zinc-300">₹{result.invested_amount}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl">
+                                    <div className="h-px bg-white/5 w-full my-2"></div>
+                                    <div className="flex justify-between items-center">
                                         <span className="text-sm text-zinc-400">Live NAV (Est)</span>
                                         <span className="font-mono text-white">₹{result.current_nav}</span>
                                     </div>

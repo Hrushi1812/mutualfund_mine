@@ -60,17 +60,29 @@ const FundList = ({ onSelect }) => {
                     {funds.map((fund, index) => (
                         <div
                             key={index}
-                            onClick={() => onSelect && onSelect(fund)}
+                            onClick={() => onSelect && onSelect(fund.fund_name)}
                             className="bg-white/5 border border-white/5 hover:border-accent/50 p-4 rounded-xl transition-all cursor-pointer group active:scale-[0.98] relative"
                         >
                             <div className="flex justify-between items-center">
                                 <div className="flex-1 overflow-hidden">
-                                    <h3 className="font-semibold text-foreground truncate pr-8">{fund}</h3>
-                                    <p className="text-xs text-zinc-400 mt-1">Click to Analyze</p>
+                                    <h3 className="font-semibold text-foreground truncate pr-8">{fund.fund_name}</h3>
+                                    <p className="text-xs text-zinc-400 mt-1 flex items-center gap-2">
+                                        {fund.invested_amount ? (
+                                            <>
+                                                <span className="text-zinc-300">₹{fund.invested_amount} invested</span>
+                                                <span className="w-1 h-1 rounded-full bg-zinc-600"></span>
+                                            </>
+                                        ) : null}
+                                        {fund.invested_date ? (
+                                            <span>Started {fund.invested_date}</span>
+                                        ) : (
+                                            <span>Click to Analyze</span>
+                                        )}
+                                    </p>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button
-                                        onClick={(e) => handleDelete(e, fund)}
+                                        onClick={(e) => handleDelete(e, fund.fund_name)}
                                         className="p-2 hover:bg-red-500/20 text-zinc-500 hover:text-red-500 rounded-lg transition-colors z-10"
                                         title="Delete Portfolio"
                                     >

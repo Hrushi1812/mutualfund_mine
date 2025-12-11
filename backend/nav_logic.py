@@ -100,9 +100,10 @@ def get_live_price_change(symbol):
         # print(f"Error fetching price for {symbol}: {e}")
         return None
 
-def get_latest_nav(scheme_code):
+def get_latest_nav(scheme_code, limit=1):
     """
     Fetches the latest official NAV from mfapi.in
+    Returns a list of dicts (up to `limit`).
     """
     try:
         url = f"https://api.mfapi.in/mf/{scheme_code}"
@@ -112,16 +113,19 @@ def get_latest_nav(scheme_code):
             if data.get("status") == "SUCCESS":
                 nav_data = data["data"]
                 if nav_data:
-                    # Get the most recent NAV
-                    latest = nav_data[0]
-                    return {
-                        "date": latest["date"],
-                        "nav": float(latest["nav"]),
-                        "meta": data["meta"]
-                    }
+                    # Get the most recent NAVs
+                    recent = nav_data[:limit]
+                    results = []
+                    for item in recent:
+                         results.append({
+                            "date": item["date"],
+                            "nav": float(item["nav"]),
+                            "meta": data["meta"]
+                         })
+                    return results if limit > 1 else results[0]
     except Exception as e:
         print(f"Error fetching NAV for {scheme_code}: {e}")
-    return None
+    return [] if limit > 1 else None
 
 def get_nav_at_date(scheme_code, target_date_str):
     """
@@ -180,15 +184,19 @@ def calculate_pnl(fund_name, investment, input_date):
         # Try to infer scheme code if missing (optional future step)
         return {"error": "Scheme Code missing for this fund."}
 
-    # 1. Get Official NAV (Yesterday's Close)
-    current_data = get_latest_nav(scheme_code)
-    if not current_data:
+    # 1. Get Official NAV (Yesterday's Close + Previous)
+    recent_navs = get_latest_nav(scheme_code, limit=2)
+    
+    if not recent_navs or len(recent_navs) == 0:
         return {"error": "Could not fetch current official NAV."}
+    
+    current_data = recent_navs[0]
+    prev_official_data = recent_navs[1] if len(recent_navs) > 1 else None
     
     official_nav = current_data["nav"]
     nav_date = current_data["date"]
     current_nav = official_nav # Default
-
+    
     # Use stored values if not provided
     if not investment or not input_date:
         if not doc.get("invested_amount") or not doc.get("invested_date"):
@@ -272,12 +280,51 @@ def calculate_pnl(fund_name, investment, input_date):
         except Exception as e:
             print(f"Date parse error: {e}")
 
-    # 3. Calculate
+    # 3. Calculate Total PnL
     units = float(investment) / purchase_nav
     current_value = units * current_nav
     pnl = current_value - float(investment)
     pnl_pct = (pnl / float(investment)) * 100
     
+    # 4. Calculate Daily PnL
+    # Logic:
+    # - If Live: DayChange = LiveNAV - OfficialNAV(Yesterday)
+    # - If Not Live: DayChange = OfficialNAV(Today) - OfficialNAV(Yesterday)
+    #   (Note: If OfficialNAV(Today) is actually Yesterday's because today isn't out, 
+    #    then we need OfficialNAV(Yesterday) - OfficialNAV(DayBefore))
+    
+    day_pnl = 0.0
+    day_pnl_pct = 0.0
+    
+    # Reference NAV is the baseline to compare 'current_nav' against.
+    # Usually it is the Previous Official Close.
+    reference_nav_data = prev_official_data
+    
+    # Edge case: If current_data is NOT today (e.g. today is Monday, current_data is Friday), 
+    # AND we are NOT live, then 'current_nav' is Friday's close.
+    # We want Friday's Change -> Friday - Thursday.
+    # So reference is indeed prev_official_data (Thursday).
+    
+    # Edge case: If we ARE live (Monday mid-day), current_nav is Live Est.
+    # We compare against Friday's Close (current_data).
+    
+    reference_nav = 0.0
+    
+    if is_live:
+        # Live Est vs Last Official Close
+        reference_nav = official_nav
+    else:
+        # Latest Official vs Previous Official
+        if prev_official_data:
+            reference_nav = prev_official_data["nav"]
+        else:
+            reference_nav = official_nav # No history, 0 change
+            
+    if reference_nav > 0:
+        day_change_per_unit = current_nav - reference_nav
+        day_pnl = day_change_per_unit * units
+        day_pnl_pct = (day_change_per_unit / reference_nav) * 100
+        
     final_note = purchase_note + (live_nav_note if is_live else f" | Official NAV ({nav_date})")
 
     return {
@@ -290,6 +337,8 @@ def calculate_pnl(fund_name, investment, input_date):
         "current_value": round(current_value, 2),
         "pnl": round(pnl, 2),
         "pnl_pct": round(pnl_pct, 2),
+        "day_pnl": round(day_pnl, 2),
+        "day_pnl_pct": round(day_pnl_pct, 2),
         "last_updated": "Live" if is_live else nav_date,
         "note": final_note
     }

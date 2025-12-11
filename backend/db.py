@@ -58,7 +58,16 @@ def get_holdings(fund_name):
 
 
 def list_funds():
-    return [doc["fund_name"] for doc in collection.find({}, {"fund_name": 1})]
+    cursor = collection.find({}, {"fund_name": 1, "invested_amount": 1, "invested_date": 1, "scheme_code": 1})
+    funds = []
+    for doc in cursor:
+        funds.append({
+            "fund_name": doc.get("fund_name"),
+            "invested_amount": doc.get("invested_amount"),
+            "invested_date": doc.get("invested_date"),
+            "scheme_code": doc.get("scheme_code")
+        })
+    return funds
 
 def delete_fund(fund_name):
     result = collection.delete_one({"fund_name": fund_name})
