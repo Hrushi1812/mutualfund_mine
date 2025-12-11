@@ -19,14 +19,16 @@ class TokenData(BaseModel):
     username: Optional[str] = None
 
 # --- Application Schemas ---
+from datetime import datetime
+
 class FundBase(BaseModel):
-    fund_name: str
+    fund_name: str = Field(..., min_length=1)
     scheme_code: Optional[str] = None
-    invested_amount: Optional[float] = None
-    invested_date: Optional[str] = None # Format: YYYY-MM-DD
+    invested_amount: Optional[float] = Field(None, gt=0)
+    invested_date: Optional[str] = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$") # YYYY-MM-DD
     nickname: Optional[str] = None
 
 class PortfolioAnalysisRequest(BaseModel):
     fund_id: str
-    investment_amount: Optional[float] = None
-    investment_date: Optional[str] = None # YYYY-MM-DD
+    investment_amount: Optional[float] = Field(None, gt=0)
+    investment_date: Optional[str] = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$") # YYYY-MM-DD
