@@ -1,5 +1,5 @@
-import React, { useState, useContext } from 'react';
-import { Upload, Calendar, FileSpreadsheet, CheckCircle2, AlertCircle, IndianRupee, X } from 'lucide-react';
+import React, { useState, useContext, useRef } from 'react';
+import { Upload, Calendar, FileSpreadsheet, CheckCircle2, AlertCircle, IndianRupee, X, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../api';
 import { PortfolioContext } from '../../context/PortfolioContext';
@@ -11,6 +11,7 @@ const UploadHoldings = () => {
     const [fundName, setFundName] = useState('');
     const [nickname, setNickname] = useState('');
     const [investedAmount, setInvestedAmount] = useState('');
+    const fileInputRef = useRef(null);
 
     const [investedDate, setInvestedDate] = useState('');
 
@@ -18,6 +19,8 @@ const UploadHoldings = () => {
     const [showModal, setShowModal] = useState(false);
     const [candidates, setCandidates] = useState([]);
     const [pendingFundId, setPendingFundId] = useState(null);
+    // UI State for selection
+    const [selectedScheme, setSelectedScheme] = useState(null);
 
     const [dragOver, setDragOver] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -96,16 +99,19 @@ const UploadHoldings = () => {
 
     const resetForm = () => {
         setFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
         setFundName('');
         setNickname('');
         setInvestedAmount('');
         setInvestedDate('');
         setPendingFundId(null);
         setCandidates([]);
+        setSelectedScheme(null);
         setShowModal(false);
     }
 
     const handleSchemeSelection = async (schemeCode) => {
+        setSelectedScheme(schemeCode); // Highlight selection
         setLoading(true);
         try {
             await api.patch(`/funds/${pendingFundId}/scheme`, { scheme_code: schemeCode });
@@ -114,6 +120,7 @@ const UploadHoldings = () => {
             resetForm();
         } catch (error) {
             setMessage({ type: 'error', text: 'Failed to update scheme selection.' });
+            setSelectedScheme(null); // Reset on error
         } finally {
             setLoading(false);
         }
@@ -175,6 +182,7 @@ const UploadHoldings = () => {
                     >
                         <input
                             type="file"
+                            ref={fileInputRef}
                             accept=".xlsx, .xls"
                             onChange={(e) => setFile(e.target.files[0])}
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -303,18 +311,39 @@ const UploadHoldings = () => {
                             <p className="text-sm text-zinc-400 mb-4">We found multiple matching schemes. Please select the correct one:</p>
 
                             <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                                {candidates.map((c) => (
-                                    <button
-                                        key={c.schemeCode}
-                                        onClick={() => handleSchemeSelection(c.schemeCode)}
-                                        className="w-full text-left p-3 rounded-lg bg-white/5 hover:bg-auto/10 border border-white/5 hover:border-primary/50 transition-all text-sm group"
-                                    >
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-zinc-200 group-hover:text-white font-medium">{c.schemeName}</span>
-                                            <span className="text-xs text-zinc-500 bg-black/20 px-2 py-1 rounded ml-2">{c.schemeCode}</span>
-                                        </div>
-                                    </button>
-                                ))}
+                                {candidates.map((c) => {
+                                    const isSelected = selectedScheme === c.schemeCode;
+                                    const isBusy = loading && isSelected;
+
+                                    return (
+                                        <button
+                                            key={c.schemeCode}
+                                            onClick={() => handleSchemeSelection(c.schemeCode)}
+                                            disabled={loading}
+                                            className={`
+                                                w-full text-left p-3 rounded-lg border transition-all text-sm group
+                                                ${isSelected
+                                                    ? 'bg-primary/20 border-primary text-white shadow-[0_0_15px_rgba(var(--primary),0.3)]'
+                                                    : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-primary/50 text-zinc-300 hover:text-white'
+                                                }
+                                                ${loading && !isSelected ? 'opacity-40 cursor-not-allowed' : ''}
+                                            `}
+                                        >
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center gap-2">
+                                                    {isBusy && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
+                                                    <span className={`font-medium ${isSelected ? 'text-primary-foreground' : ''}`}>
+                                                        {c.schemeName}
+                                                        {isBusy && <span className="ml-2 text-xs text-primary font-normal">Uploading...</span>}
+                                                    </span>
+                                                </div>
+                                                <span className={`text-xs px-2 py-1 rounded ml-2 ${isSelected ? 'bg-primary/30 text-white' : 'bg-black/20 text-zinc-500'}`}>
+                                                    {c.schemeCode}
+                                                </span>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
                             </div>
 
                             <button

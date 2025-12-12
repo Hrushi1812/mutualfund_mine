@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes import auth, holdings, portfolio
 from db import client
 from core.logging import setup_logging, get_logger
+from core.config import settings
 
 # 1. Setup Logging
 setup_logging()
@@ -23,7 +24,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
