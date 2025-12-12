@@ -11,7 +11,13 @@ const UploadHoldings = () => {
     const [fundName, setFundName] = useState('');
     const [nickname, setNickname] = useState('');
     const [investedAmount, setInvestedAmount] = useState('');
+
     const [investedDate, setInvestedDate] = useState('');
+
+    // Ambiguity Handling
+    const [showModal, setShowModal] = useState(false);
+    const [candidates, setCandidates] = useState([]);
+    const [pendingFundId, setPendingFundId] = useState(null);
 
     const [dragOver, setDragOver] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -47,21 +53,24 @@ const UploadHoldings = () => {
         if (nickname) formData.append('nickname', nickname);
 
         try {
-            await api.post('/upload-holdings/', formData, {
+            const response = await api.post('/upload-holdings/', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
-            setMessage({ type: 'success', text: 'Portfolio uploaded successfully!' });
+            const data = response.data;
 
-            // Refresh global list
-            fetchFunds();
-
-            // Reset form
-            // Reset form
-            setFile(null);
-            setFundName('');
-            setNickname('');
-            setInvestedAmount('');
-            setInvestedDate('');
+            if (data.upload_status && data.upload_status.requires_selection) {
+                // AMBIGUITY DETECTED
+                setPendingFundId(data.upload_status.id);
+                setCandidates(data.upload_status.candidates || []);
+                setShowModal(true);
+                setMessage({ type: '', text: '' }); // Clear success msg for now
+            } else {
+                // SUCCESS NO AMBIGUITY
+                setMessage({ type: 'success', text: 'Portfolio uploaded successfully!' });
+                fetchFunds();
+                // Reset form
+                resetForm();
+            }
         } catch (error) {
             console.error(error);
             let userMsg = 'Upload failed. Please check the file format.';
@@ -84,6 +93,31 @@ const UploadHoldings = () => {
             setLoading(false);
         }
     };
+
+    const resetForm = () => {
+        setFile(null);
+        setFundName('');
+        setNickname('');
+        setInvestedAmount('');
+        setInvestedDate('');
+        setPendingFundId(null);
+        setCandidates([]);
+        setShowModal(false);
+    }
+
+    const handleSchemeSelection = async (schemeCode) => {
+        setLoading(true);
+        try {
+            await api.patch(`/funds/${pendingFundId}/scheme`, { scheme_code: schemeCode });
+            setMessage({ type: 'success', text: 'Scheme selected and portfolio updated!' });
+            fetchFunds();
+            resetForm();
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to update scheme selection.' });
+        } finally {
+            setLoading(false);
+        }
+    }
 
     return (
         <motion.div
@@ -253,8 +287,46 @@ const UploadHoldings = () => {
                         </motion.div>
                     )}
                 </AnimatePresence>
-
             </form>
+
+            {/* AMBIGUITY MODAL */}
+            <AnimatePresence>
+                {showModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl"
+                        >
+                            <h3 className="text-xl font-bold text-white mb-2">Select Fund Scheme</h3>
+                            <p className="text-sm text-zinc-400 mb-4">We found multiple matching schemes. Please select the correct one:</p>
+
+                            <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                                {candidates.map((c) => (
+                                    <button
+                                        key={c.schemeCode}
+                                        onClick={() => handleSchemeSelection(c.schemeCode)}
+                                        className="w-full text-left p-3 rounded-lg bg-white/5 hover:bg-auto/10 border border-white/5 hover:border-primary/50 transition-all text-sm group"
+                                    >
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-zinc-200 group-hover:text-white font-medium">{c.schemeName}</span>
+                                            <span className="text-xs text-zinc-500 bg-black/20 px-2 py-1 rounded ml-2">{c.schemeCode}</span>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+
+                            <button
+                                onClick={resetForm}
+                                className="mt-4 w-full py-2 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white rounded-lg transition-colors text-sm"
+                            >
+                                Cancel Upload
+                            </button>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </motion.div>
     );
 };

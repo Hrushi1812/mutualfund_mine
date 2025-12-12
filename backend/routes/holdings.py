@@ -70,3 +70,31 @@ async def upload(
         "analysis": analysis,
         "scheme_code_used": scheme_code
     }
+from pydantic import BaseModel
+
+class SchemeUpdate(BaseModel):
+    scheme_code: str
+
+@router.patch("/funds/{fund_id}/scheme")
+def update_scheme(
+    fund_id: str, 
+    payload: SchemeUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = str(current_user["_id"])
+    success = holdings_service.update_fund_scheme(fund_id, user_id, payload.scheme_code)
+    
+    if not success:
+         raise HTTPException(404, "Fund not found or update failed.")
+         
+    # Re-trigger analysis since we now have the correct code
+    # We might need to fetch the doc again to get investment details
+    # But NavService.calculate_pnl handles fetching doc by ID.
+    
+    # We intentionally pass None for investment/date to use stored values
+    analysis = nav_service.calculate_pnl(fund_id, user_id)
+    
+    return {
+        "message": "Scheme updated successfully",
+        "analysis": analysis
+    }

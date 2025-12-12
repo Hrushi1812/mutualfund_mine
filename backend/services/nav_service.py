@@ -300,19 +300,23 @@ class NavService:
         official_d_minus_3 = nav_map.get(d_minus_3_str)
 
         # --- Determine if live data should be considered D0 or D-1 ---
-        # We'll interpret live "D0" data only when market is open OR after previous trading day's close.
-        # For D-1 estimation we rely solely on historical API (yfinance), not live pChange.
+        # We'll interpret live "D0" data only when:
+        # 1. Today is a valid trading day (not weekend/holiday)
+        # 2. Market has already opened (current time >= MARKET_OPEN_TIME)
+        # If it's a trading day but before market open, live API might return old data or zeros, so we stick to D-1.
+        # If it's a weekend/holiday, live API returns previous trading day's close, so it does NOT belong to "Today" (D0).
+        
+        # FIX: Check for stale D0 NAV (same as D-1) during market hours
+        # This happens when API returns a "today" row but value hasn't updated from yesterday yet.
+        if is_trading_day(now) and now.time() >= MARKET_OPEN_TIME:
+             if official_d0 is not None and official_d_minus_1 is not None:
+                 if official_d0 == official_d_minus_1:
+                     logger.info(f"Detected stale D0 NAV for {scheme_code}: D0 matches D-1. Forcing estimation.")
+                     official_d0 = None
+                     
         data_is_d0 = False
-        # conservative rule: treat live data as D0 only if market currently open OR we've passed last market close of D0 (i.e., now.time() >= MARKET_CLOSE_TIME)
-        if is_market_open(now):
-            data_is_d0 = True
-        else:
-            # If current time is after today's market close (i.e., later in evening), the live feed (closing) corresponds to D0
-            if now.time() >= getattr(MARKET_OPEN_TIME, "replace", lambda *a, **k: MARKET_OPEN_TIME)():  # safe guard
-                # after market open: data likely belongs to D0 (covers after-market close scenarios when now > close)
-                data_is_d0 = True
-            else:
-                data_is_d0 = False
+        if is_trading_day(now) and now.time() >= MARKET_OPEN_TIME:
+             data_is_d0 = True
 
         # --- Prepare Estimates ---
         estimated_d0 = None

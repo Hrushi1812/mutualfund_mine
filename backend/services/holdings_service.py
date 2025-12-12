@@ -5,6 +5,7 @@ from io import StringIO
 from bson import ObjectId
 from db import holdings_collection
 from typing import List, Optional
+import difflib
 
 from datetime import datetime
 from utils.common import NSE_HEADERS, NSE_CSV_URL
@@ -48,16 +49,47 @@ def isin_to_symbol_nse(isin, nse_table=None):
     return None
 
 def search_scheme_code(query):
+    # DEPRECATED: Use get_scheme_candidates logic instead
+    return None
+
+def get_scheme_candidates(query):
+    """Returns top matches with scores."""
     try:
         url = f"https://api.mfapi.in/mf/search?q={query}"
-        response = requests.get(url)
+        response = requests.get(url, timeout=5)
         if response.status_code == 200:
              data = response.json()
-             if data and len(data) > 0:
-                 return str(data[0]["schemeCode"])
+             if not data: return []
+             
+             # Scoring Logic
+             def get_score(item):
+                 name = item["schemeName"]
+                 # Base similarity
+                 ratio = difflib.SequenceMatcher(None, query.lower(), name.lower()).ratio()
+                 
+                 # Heuristics
+                 if "Direct" in name: ratio += 0.05
+                 if "Growth" in name: ratio += 0.05
+                 if "Regular" in name: ratio -= 0.05
+                 if "IDCW" in name or "Dividend" in name: ratio -= 0.05
+                 
+                 # Strict Penalty for 'Bonus' unless query has it
+                 if "Bonus" in name and "Bonus" not in query: ratio -= 0.2
+                 
+                 return ratio
+
+             # Calculate all scores
+             scored = []
+             for item in data:
+                 s = get_score(item)
+                 scored.append({"schemeCode": str(item["schemeCode"]), "schemeName": item["schemeName"], "score": s})
+             
+             # Sort desc
+             scored.sort(key=lambda x: x["score"], reverse=True)
+             return scored[:5] # Return top 5
     except Exception as e:
         logger.warning(f"Search error for '{query}': {e}")
-    return None
+    return []
 
 # --- Main Service Class ---
 
@@ -126,6 +158,20 @@ class HoldingsService:
             res = holdings_collection.delete_one({"_id": ObjectId(fund_id_str), "user_id": user_id})
             return res.deleted_count > 0
         except:
+            return False
+
+    @staticmethod
+    def update_fund_scheme(fund_id_str, user_id, new_scheme_code, new_scheme_name=None):
+        try:
+            update_data = {"scheme_code": new_scheme_code}
+            # Optionally update nickname or metadata if needed, for now just code
+            res = holdings_collection.update_one(
+                {"_id": ObjectId(fund_id_str), "user_id": user_id},
+                {"$set": update_data}
+            )
+            return res.modified_count > 0
+        except Exception as e:
+            logger.error(f"Update fund scheme failed: {e}")
             return False
 
     @staticmethod
@@ -214,12 +260,32 @@ class HoldingsService:
             return {"error": "No valid holdings resolved."}
 
         # 5.5 Auto-lookup Scheme Code if missing
+        candidates = []
         if not scheme_code:
             logger.info(f"Scheme code not provided for '{fund_name}'. Attempting auto-lookup...")
-            code = search_scheme_code(fund_name)
-            if code:
-                scheme_code = code
-                logger.info(f"Found scheme code: {scheme_code}")
+            candidates = get_scheme_candidates(fund_name)
+            
+            if candidates:
+                top = candidates[0]
+                # improved auto-selection logic
+                # If very high score > 0.9 or (gap between 1st and 2nd is large > 0.1)
+                is_confident = False
+                if len(candidates) == 1:
+                    is_confident = top["score"] > 0.5
+                else:
+                    second = candidates[1]
+                    gap = top["score"] - second["score"]
+                    # Increased threshold to be more conservative and ask user more often
+                    # Previously gap > 0.1, now 0.25.
+                    if top["score"] > 0.9 or gap > 0.25:
+                        is_confident = True
+                
+                if is_confident:
+                    scheme_code = top["schemeCode"]
+                    logger.info(f"Auto-selected scheme: {top['schemeName']} (Score: {top['score']:.2f})")
+                else:
+                    logger.info(f"Ambiguous match. Top: {top['schemeName']} ({top['score']:.2f}). Returning candidates.")
+                    # Leave scheme_code as None
             else:
                 logger.warning(f"Could not find scheme code for '{fund_name}'")
 
@@ -269,7 +335,9 @@ class HoldingsService:
             "message": f"Holdings saved for {fund_name}",
             "count": len(holdings_list),
             "unresolved_count": len(unresolved),
-            "id": saved_id
+            "id": saved_id,
+            "candidates": candidates if not scheme_code else None, # Return candidates if still ambiguous
+            "requires_selection": True if (not scheme_code and candidates) else False
         }
 
 holdings_service = HoldingsService()
