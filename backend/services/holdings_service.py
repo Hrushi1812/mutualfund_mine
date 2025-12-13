@@ -272,6 +272,9 @@ class HoldingsService:
             logger.info(f"Scheme code not provided for '{fund_name}'. Attempting auto-lookup...")
             candidates = get_scheme_candidates(fund_name)
             
+            if not candidates:
+                return {"error": f"Could not find any schemes matching '{fund_name}'. Please verify the fund name."}
+
             if candidates:
                 top = candidates[0]
                 # improved auto-selection logic

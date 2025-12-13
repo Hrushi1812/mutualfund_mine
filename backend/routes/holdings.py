@@ -60,8 +60,8 @@ async def upload(
         fund_name, file, user_id, scheme_code, amount_float, invested_date, nickname
     )
     
-    if "error" in save_result and save_result["error"] != "No valid holdings resolved.":
-         pass 
+    if "error" in save_result:
+         raise HTTPException(400, save_result["error"]) 
 
     analysis = None
         

@@ -87,7 +87,8 @@ const UploadHoldings = () => {
                 // Server responded with an error code
                 if (error.response.data && error.response.data.detail) {
                     // FastAPI default error structure
-                    userMsg = `Error: ${JSON.stringify(error.response.data.detail)}`;
+                    const detail = error.response.data.detail;
+                    userMsg = `Error: ${typeof detail === 'object' ? JSON.stringify(detail) : detail}`;
                 }
             } else if (error.request) {
                 // Request made but no response (Network Error)
