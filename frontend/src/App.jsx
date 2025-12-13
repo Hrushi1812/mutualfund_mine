@@ -9,6 +9,8 @@ import { AuthProvider } from "./context/AuthContext";
 import { PortfolioProvider } from "./context/PortfolioContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 
+import { Analytics } from "@vercel/analytics/react";
+
 function App() {
   useEffect(() => {
     const lenis = new Lenis({
@@ -31,25 +33,28 @@ function App() {
   }, []);
 
   return (
-    <AuthProvider>
-      <PortfolioProvider>
-        <Router>
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
-        </Router>
-      </PortfolioProvider>
-    </AuthProvider>
+    <>
+      <AuthProvider>
+        <PortfolioProvider>
+          <Router>
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
+          </Router>
+        </PortfolioProvider>
+      </AuthProvider>
+      <Analytics />
+    </>
   );
 }
 
