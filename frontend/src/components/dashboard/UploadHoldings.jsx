@@ -40,8 +40,8 @@ const UploadHoldings = () => {
 
     const handleUpload = async (e) => {
         e.preventDefault();
-        if (!file || !fundName) {
-            setMessage({ type: 'error', text: 'Please provide Fund Name and Excel File' });
+        if (!file || !fundName || !investedAmount || !investedDate) {
+            setMessage({ type: 'error', text: 'Please provide all mandatory fields: Fund Name, File, Amount, and Date.' });
             return;
         }
 
@@ -52,7 +52,12 @@ const UploadHoldings = () => {
         formData.append('investment_type', mode);
 
         if (investedAmount) formData.append('invested_amount', investedAmount);
-        if (investedDate) formData.append('invested_date', investedDate);
+        if (investedDate) {
+            // Convert YYYY-MM-DD to DD-MM-YYYY
+            const [year, month, day] = investedDate.split('-');
+            const formattedDate = `${day}-${month}-${year}`;
+            formData.append('invested_date', formattedDate);
+        }
         if (nickname) formData.append('nickname', nickname);
 
         try {
@@ -146,7 +151,7 @@ const UploadHoldings = () => {
 
                 {/* 1. Fund Name */}
                 <div>
-                    <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Portfolio / Fund Name</label>
+                    <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Portfolio / Fund Name <span className="text-red-500">*</span></label>
                     <input
                         type="text"
                         value={fundName}
@@ -170,7 +175,7 @@ const UploadHoldings = () => {
 
                 {/* 2. Excel Upload Area */}
                 <div>
-                    <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Holdings File (Excel)</label>
+                    <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Holdings File (Excel) <span className="text-red-500">*</span></label>
                     <div
                         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                         onDragLeave={() => setDragOver(false)}
@@ -242,7 +247,7 @@ const UploadHoldings = () => {
                 {/* 4. Details Row */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="relative">
-                        <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Invested Amount</label>
+                        <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Invested Amount <span className="text-red-500">*</span></label>
                         <div className="relative">
                             <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                             <input
@@ -255,7 +260,7 @@ const UploadHoldings = () => {
                         </div>
                     </div>
                     <div>
-                        <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Invested Date</label>
+                        <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Invested Date <span className="text-red-500">*</span></label>
                         <div className="relative">
                             <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                             <input
