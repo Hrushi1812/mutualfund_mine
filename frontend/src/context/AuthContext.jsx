@@ -53,7 +53,18 @@ export const AuthProvider = ({ children }) => {
             return { success: true };
         } catch (error) {
             console.error("Registration failed", error);
-            return { success: false, message: error.response?.data?.detail || "Registration failed" };
+            let errorMessage = "Registration failed";
+            if (error.response?.data?.detail) {
+                const detail = error.response.data.detail;
+                if (typeof detail === 'string') {
+                    errorMessage = detail;
+                } else if (Array.isArray(detail)) {
+                    errorMessage = detail.map(err => err.msg).join(', ');
+                } else if (typeof detail === 'object') {
+                    errorMessage = JSON.stringify(detail);
+                }
+            }
+            return { success: false, message: errorMessage };
         }
     };
 

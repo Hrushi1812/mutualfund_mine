@@ -23,9 +23,16 @@ class HoldingsDocument(BaseModel):
     # Metadata
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+class UserUpload(BaseModel):
+    holding_id: str
+    fund_name: str
+    invested_date: Optional[str] = None
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+
 class UserDocument(BaseModel):
     """Schema for the 'users' collection."""
     username: str
     email: EmailStr
     hashed_password: str
+    uploads: List[UserUpload] = []
     created_at: datetime = Field(default_factory=datetime.utcnow)

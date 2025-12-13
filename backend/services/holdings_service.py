@@ -3,7 +3,7 @@ import csv
 import requests
 from io import StringIO
 from bson import ObjectId
-from db import holdings_collection
+from db import holdings_collection, users_collection
 from typing import List, Optional
 import difflib
 
@@ -156,7 +156,14 @@ class HoldingsService:
     def delete_fund(fund_id_str, user_id):
         try:
             res = holdings_collection.delete_one({"_id": ObjectId(fund_id_str), "user_id": user_id})
-            return res.deleted_count > 0
+            if res.deleted_count > 0:
+                # Remove from user's uploads
+                users_collection.update_one(
+                    {"_id": ObjectId(user_id)},
+                    {"$pull": {"uploads": {"holding_id": fund_id_str}}}
+                )
+                return True
+            return False
         except:
             return False
 
@@ -330,6 +337,26 @@ class HoldingsService:
         # Fetch the ID
         saved_doc = holdings_collection.find_one(query)
         saved_id = str(saved_doc["_id"]) if saved_doc else None
+
+        # Update User's Uploads List
+        if saved_id:
+             # Remove existing reference to this holding if any (to avoid duplicates/stale data)
+             users_collection.update_one(
+                 {"_id": ObjectId(user_id)},
+                 {"$pull": {"uploads": {"holding_id": saved_id}}}
+             )
+             
+             # Push new reference
+             upload_entry = {
+                 "holding_id": saved_id,
+                 "fund_name": fund_name,
+                 "invested_date": invested_date,
+                 "uploaded_at": datetime.utcnow()
+             }
+             users_collection.update_one(
+                 {"_id": ObjectId(user_id)},
+                 {"$push": {"uploads": upload_entry}}
+             )
 
         return {
             "message": f"Holdings saved for {fund_name}",

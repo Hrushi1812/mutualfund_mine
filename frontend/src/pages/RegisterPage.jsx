@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Lock, User, Mail, ArrowRight } from 'lucide-react';
+import { Lock, User, Mail, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AuthContext } from '../context/AuthContext';
 
@@ -10,6 +10,7 @@ const RegisterPage = () => {
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({ username: '', email: '', password: '' });
     const [error, setError] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
 
     const handleRegister = async (e) => {
         e.preventDefault();
@@ -28,7 +29,7 @@ const RegisterPage = () => {
 
     return (
         <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-            {/* Background Decoration */}
+            {/* ... Background Decoration ... */}
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
                 <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-brand-accent/20 rounded-full blur-[128px]"></div>
                 <div className="absolute bottom-1/4 left-1/4 w-96 h-96 bg-brand-glow/10 rounded-full blur-[128px]"></div>
@@ -85,13 +86,46 @@ const RegisterPage = () => {
                         <div className="relative group">
                             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-brand-muted group-focus-within:text-brand-glow transition-colors" />
                             <input
-                                type="password"
+                                type={showPassword ? "text" : "password"}
                                 required
                                 value={formData.password}
                                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                className="w-full bg-brand-surface border border-white/5 rounded-lg py-3 pl-10 pr-4 text-brand-text focus:outline-none focus:border-brand-glow/50 focus:ring-1 focus:ring-brand-glow/50 transition-all placeholder:text-gray-600"
+                                className="w-full bg-brand-surface border border-white/5 rounded-lg py-3 pl-10 pr-12 text-brand-text focus:outline-none focus:border-brand-glow/50 focus:ring-1 focus:ring-brand-glow/50 transition-all placeholder:text-gray-600"
                                 placeholder="Create a password"
                             />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-glow transition-colors focus:outline-none"
+                            >
+                                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                            </button>
+                        </div>
+                        {/* Password Strength Checklist */}
+                        <div className="mt-2 text-xs space-y-1 p-2 bg-black/20 rounded-md border border-white/5">
+                            <p className="text-brand-muted font-semibold mb-1">Password must contain:</p>
+                            <ul className="grid grid-cols-1 gap-1">
+                                <li className={`flex items-center gap-2 ${formData.password.length >= 8 ? 'text-green-400' : 'text-gray-500'}`}>
+                                    <div className={`w-1.5 h-1.5 rounded-full ${formData.password.length >= 8 ? 'bg-green-400' : 'bg-gray-600'}`} />
+                                    At least 8 characters
+                                </li>
+                                <li className={`flex items-center gap-2 ${/[A-Z]/.test(formData.password) ? 'text-green-400' : 'text-gray-500'}`}>
+                                    <div className={`w-1.5 h-1.5 rounded-full ${/[A-Z]/.test(formData.password) ? 'bg-green-400' : 'bg-gray-600'}`} />
+                                    One uppercase letter
+                                </li>
+                                <li className={`flex items-center gap-2 ${/[a-z]/.test(formData.password) ? 'text-green-400' : 'text-gray-500'}`}>
+                                    <div className={`w-1.5 h-1.5 rounded-full ${/[a-z]/.test(formData.password) ? 'bg-green-400' : 'bg-gray-600'}`} />
+                                    One lowercase letter
+                                </li>
+                                <li className={`flex items-center gap-2 ${/\d/.test(formData.password) ? 'text-green-400' : 'text-gray-500'}`}>
+                                    <div className={`w-1.5 h-1.5 rounded-full ${/\d/.test(formData.password) ? 'bg-green-400' : 'bg-gray-600'}`} />
+                                    One number
+                                </li>
+                                <li className={`flex items-center gap-2 ${/[!@#$%^&*(),.?":{}|<>]/.test(formData.password) ? 'text-green-400' : 'text-gray-500'}`}>
+                                    <div className={`w-1.5 h-1.5 rounded-full ${/[!@#$%^&*(),.?":{}|<>]/.test(formData.password) ? 'bg-green-400' : 'bg-gray-600'}`} />
+                                    One special character
+                                </li>
+                            </ul>
                         </div>
                     </div>
 
