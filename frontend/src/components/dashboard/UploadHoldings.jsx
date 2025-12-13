@@ -136,7 +136,7 @@ const UploadHoldings = () => {
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="glass p-8 rounded-3xl relative overflow-hidden"
+            className="glass p-6 md:p-8 rounded-3xl relative overflow-hidden"
         >
             {/* Glow Effect */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-[80px] -z-10"></div>
@@ -157,7 +157,7 @@ const UploadHoldings = () => {
                         type="text"
                         value={fundName}
                         onChange={(e) => setFundName(e.target.value)}
-                        placeholder="e.g. My Bluechip Portfolio"
+                        placeholder="e.g. Nippon India Multi Cap Fund"
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors"
                     />
                 </div>

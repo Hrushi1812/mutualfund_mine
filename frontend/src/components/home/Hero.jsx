@@ -9,7 +9,7 @@ const Hero = () => {
     const navigate = useNavigate();
 
     return (
-        <section className="relative h-screen flex items-center justify-center overflow-hidden">
+        <section className="relative min-h-screen flex items-center justify-center overflow-hidden py-20 md:py-0">
             {/* Background Gradients */}
             <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl -z-10 animate-float" />
             <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/20 rounded-full blur-3xl -z-10 animate-float" style={{ animationDelay: "2s" }} />
@@ -31,7 +31,7 @@ const Hero = () => {
                     </div>
                 </div>
 
-                <div className="h-[300px] md:h-[600px] w-full relative">
+                <div className="h-[300px] md:h-[600px] w-full relative order-first md:order-last">
                     <Canvas className="w-full h-full" camera={{ position: [0, 0, 5] }}>
                         {/* <ambientLight intensity={0.5} /> */}
                         {/* <directionalLight position={[10, 10, 5]} intensity={1} /> */}
@@ -42,8 +42,8 @@ const Hero = () => {
                 </div>
             </div>
 
-            {/* Scroll Indicator */}
-            <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 animate-bounce opacity-50">
+            {/* Scroll Indicator - Hidden on small mobile screens if height is small */}
+            <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 animate-bounce opacity-50 hidden md:block">
                 <div className="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center pt-2">
                     <div className="w-1 h-3 bg-white/50 rounded-full" />
                 </div>

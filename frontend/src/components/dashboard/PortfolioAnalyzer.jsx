@@ -109,21 +109,21 @@ const PortfolioAnalyzer = ({ fundId, onClose }) => {
                             // Results View
                             <div className="space-y-6">
                                 {/* Key Metrics Grid - Creative Redesign */}
-                                <div className="grid grid-cols-3 gap-4 mb-6">
+                                <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
                                     {/* Invested */}
                                     <div className="flex flex-col">
-                                        <span className="text-xs text-zinc-500 mb-1 font-medium tracking-wide">Invested value</span>
-                                        <span className="text-lg font-bold text-white tracking-tight">₹{result.invested_amount}</span>
+                                        <span className="text-[10px] sm:text-xs text-zinc-500 mb-1 font-medium tracking-wide">Invested</span>
+                                        <span className="text-base sm:text-lg font-bold text-white tracking-tight">₹{result.invested_amount}</span>
                                     </div>
 
                                     {/* 1D Returns */}
                                     <div className="flex flex-col items-center">
-                                        <span className="text-xs text-zinc-500 mb-1 font-medium tracking-wide">1D returns</span>
+                                        <span className="text-[10px] sm:text-xs text-zinc-500 mb-1 font-medium tracking-wide">1D returns</span>
                                         <div className={`flex flex-col items-center leading-tight ${result.day_pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                            <span className="text-sm font-bold whitespace-nowrap">
+                                            <span className="text-sm border-b border-transparent font-bold whitespace-nowrap">
                                                 {result.day_pnl >= 0 ? '+' : ''}₹{Math.abs(result.day_pnl)}
                                             </span>
-                                            <span className="text-xs font-medium opacity-80 whitespace-nowrap">
+                                            <span className="text-[10px] sm:text-xs font-medium opacity-80 whitespace-nowrap">
                                                 ({result.day_pnl >= 0 ? '+' : ''}{result.day_pnl_pct}%)
                                             </span>
                                         </div>
@@ -131,12 +131,12 @@ const PortfolioAnalyzer = ({ fundId, onClose }) => {
 
                                     {/* Total Returns */}
                                     <div className="flex flex-col items-end">
-                                        <span className="text-xs text-zinc-500 mb-1 font-medium tracking-wide">Total returns</span>
+                                        <span className="text-[10px] sm:text-xs text-zinc-500 mb-1 font-medium tracking-wide">Total returns</span>
                                         <div className={`flex flex-col items-end leading-tight ${result.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                                             <span className="text-sm font-bold whitespace-nowrap">
                                                 {result.pnl >= 0 ? '+' : ''}₹{Math.abs(result.pnl)}
                                             </span>
-                                            <span className="text-xs font-medium opacity-80 whitespace-nowrap">
+                                            <span className="text-[10px] sm:text-xs font-medium opacity-80 whitespace-nowrap">
                                                 ({result.pnl >= 0 ? '+' : ''}{result.pnl_pct}%)
                                             </span>
                                         </div>

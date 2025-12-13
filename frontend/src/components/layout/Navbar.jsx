@@ -87,7 +87,7 @@ const Navbar = () => {
 
             {/* Mobile Nav */}
             {mobileOpen && (
-                <div className="md:hidden absolute top-full left-0 w-full glass bg-black/90 border-t border-white/10 p-6 flex flex-col space-y-4 shadow-2xl h-screen">
+                <div className="md:hidden absolute top-full left-0 w-full bg-black/95 backdrop-blur-xl border-t border-white/10 p-6 flex flex-col space-y-4 shadow-2xl h-[calc(100vh-80px)] overflow-y-auto">
                     {navLinks.map((link) => (
                         <a
                             key={link.name}
