@@ -11,13 +11,29 @@ from utils.date_utils import (
     parse_date_from_str,
     MARKET_OPEN_TIME,
 )
-from utils.common import NSE_API_URL
+from utils.common import NSE_API_URL, NSE_BASE_URL
 from core.logging import get_logger
 
 logger = get_logger("NavService")
 
 
 class NavService:
+    @staticmethod
+    def ensure_nse_cookies():
+        """Ensures that the session has valid cookies from NSE home page."""
+        if not session.cookies.get("nsit"):  # Check for a specific NSE cookie if possible, or just length
+             # If no cookies, or we want to be safe, visit home
+             try:
+                 # Check if we already have some cookies
+                 if len(session.cookies) > 0:
+                     return
+
+                 logger.info("Initializing NSE cookies (visiting home page)...")
+                 # User-Agent is already in headers
+                 session.get(NSE_BASE_URL, timeout=10)
+             except Exception as e:
+                 logger.error(f"Failed to initialize NSE cookies: {e}")
+
     @staticmethod
     def get_live_price_change(symbol):
         """Fetches live P-Change from NSE for a symbol (expected symbol format e.g. 'RELIANCE')."""
@@ -120,6 +136,9 @@ class NavService:
         total_stocks = len(valid_stocks)
         if total_stocks == 0:
             return None
+
+        # Ensure we have cookies before starting parallel requests
+        NavService.ensure_nse_cookies()
 
         logger.info(f"Starting live price fetch for {total_stocks} stocks...")
         start_time = time.time()
