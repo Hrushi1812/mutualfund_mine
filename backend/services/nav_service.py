@@ -35,22 +35,50 @@ class NavService:
                  logger.error(f"Failed to initialize NSE cookies: {e}")
 
     @staticmethod
-    def get_live_price_change(symbol):
-        """Fetches live P-Change from NSE for a symbol (expected symbol format e.g. 'RELIANCE')."""
-        try:
-            r = session.get(NSE_API_URL, params={"symbol": symbol}, timeout=5)
-            content_type = r.headers.get("Content-Type", "")
-            if "application/json" not in content_type:
-                logger.debug(f"NSE returned non-json for {symbol}: {content_type}")
+    def get_live_price_change(symbol, max_retries=3):
+        """Fetches live P-Change from NSE for a symbol (expected symbol format e.g. 'RELIANCE').
+        Includes retry logic with exponential backoff for robustness.
+        """
+        for attempt in range(max_retries):
+            try:
+                r = session.get(NSE_API_URL, params={"symbol": symbol}, timeout=10)
+                content_type = r.headers.get("Content-Type", "")
+                
+                # Handle rate limiting (429) or server errors (5xx)
+                if r.status_code == 429 or r.status_code >= 500:
+                    wait_time = (attempt + 1) * 2  # 2s, 4s, 6s
+                    logger.debug(f"NSE rate limit/error for {symbol}, retry {attempt+1} after {wait_time}s")
+                    time.sleep(wait_time)
+                    continue
+                    
+                if "application/json" not in content_type:
+                    # Sometimes NSE returns HTML on overload, retry
+                    if attempt < max_retries - 1:
+                        time.sleep(1)
+                        continue
+                    logger.debug(f"NSE returned non-json for {symbol}: {content_type}")
+                    return None
+                    
+                data = r.json()
+                # defensive access
+                price_info = data.get("priceInfo") or {}
+                p_change = price_info.get("pChange")
+                return float(p_change) if p_change is not None else None
+                
+            except requests.exceptions.Timeout:
+                if attempt < max_retries - 1:
+                    logger.debug(f"Timeout for {symbol}, retry {attempt+1}")
+                    time.sleep(1)
+                    continue
+                logger.debug(f"get_live_price_change({symbol}) timed out after {max_retries} attempts")
                 return None
-            data = r.json()
-            # defensive access
-            price_info = data.get("priceInfo") or {}
-            p_change = price_info.get("pChange")
-            return float(p_change) if p_change is not None else None
-        except Exception as e:
-            logger.debug(f"get_live_price_change({symbol}) failed: {e}")
-            return None
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    time.sleep(0.5)
+                    continue
+                logger.debug(f"get_live_price_change({symbol}) failed: {e}")
+                return None
+        return None
 
     @staticmethod
     def get_latest_nav(scheme_code, limit=1):
@@ -124,6 +152,11 @@ class NavService:
         Calculates the weighted average percent change (intraday live) of the portfolio using parallel fetching.
         We expect holdings to have "Symbol" and "Weight" (either fraction 0..1 or percent like 5.5).
         Returns weighted pct change (e.g., 1.23 for +1.23%) or None if insufficient coverage.
+        
+        Optimized for maximum coverage with:
+        - Reduced parallelism (5 workers) to avoid NSE rate limiting
+        - Retry logic in get_live_price_change
+        - Two-pass approach: first pass parallel, second pass retry failures sequentially
         """
         import concurrent.futures
 
@@ -142,6 +175,10 @@ class NavService:
 
         logger.info(f"Starting live price fetch for {total_stocks} stocks...")
         start_time = time.time()
+        
+        # Track results and failures for retry
+        results = {}  # symbol -> (weight, pct_change)
+        failed_stocks = []
 
         def fetch_price(stock):
             sym = stock.get("Symbol")
@@ -150,27 +187,62 @@ class NavService:
             if wt > 1:
                 wt = wt / 100.0
             pct = NavService.get_live_price_change(sym)
-            return (wt, pct)
+            return (sym, wt, pct)
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        # PASS 1: Parallel fetch with reduced concurrency to avoid rate limiting
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             future_to_stock = {executor.submit(fetch_price, stock): stock for stock in valid_stocks}
             for future in concurrent.futures.as_completed(future_to_stock):
+                stock = future_to_stock[future]
                 try:
-                    wt, pct = future.result()
+                    sym, wt, pct = future.result()
                     if pct is not None:
+                        results[sym] = (wt, pct)
                         total_prod += (wt * pct)
                         total_wt += wt
                         stocks_checked += 1
+                    else:
+                        failed_stocks.append(stock)
                 except Exception as exc:
-                    logger.error(f"Stock fetch generated an exception: {exc}")
+                    logger.debug(f"Stock fetch exception for {stock.get('Symbol')}: {exc}")
+                    failed_stocks.append(stock)
+
+        # PASS 2: Sequential retry for failed stocks with delay between requests
+        if failed_stocks:
+            logger.info(f"Retrying {len(failed_stocks)} failed stocks sequentially...")
+            for stock in failed_stocks:
+                sym = stock.get("Symbol")
+                wt = float(stock.get("Weight", 0) or 0)
+                if wt > 1:
+                    wt = wt / 100.0
+                
+                # Small delay to avoid rate limiting
+                time.sleep(0.3)
+                
+                # Retry with fresh cookie refresh if many failures
+                if len(failed_stocks) > 20 and failed_stocks.index(stock) == 0:
+                    try:
+                        session.cookies.clear()
+                        session.get(NSE_BASE_URL, timeout=10)
+                    except Exception:
+                        pass
+                
+                pct = NavService.get_live_price_change(sym, max_retries=2)
+                if pct is not None:
+                    results[sym] = (wt, pct)
+                    total_prod += (wt * pct)
+                    total_wt += wt
+                    stocks_checked += 1
 
         duration = time.time() - start_time
-        logger.info(f"Live fetch completed in {duration:.2f}s. Valid: {stocks_checked}/{total_stocks}")
+        logger.info(f"Live fetch completed in {duration:.2f}s. Valid: {stocks_checked}/{total_stocks}, Coverage: {total_wt*100:.1f}%")
 
-        # require at least 50% of portfolio weight coverage
-        if total_wt >= 0.5:
+        # require at least 75% of portfolio weight coverage for reliable estimation
+        if total_wt >= 0.75:
             # normalized weighted average percent change
             return total_prod / total_wt
+        else:
+            logger.warning(f"Insufficient coverage ({total_wt*100:.1f}% < 75%), skipping D0 estimation")
         return None
 
     @staticmethod
@@ -267,10 +339,13 @@ class NavService:
                     total_wt += wt
                     stocks_checked += 1
 
-            logger.info(f"Historical fetch complete. Valid: {stocks_checked}/{len(valid_stocks)}")
+            logger.info(f"Historical fetch complete. Valid: {stocks_checked}/{len(valid_stocks)}, Coverage: {total_wt*100:.1f}%")
 
-            if total_wt >= 0.5:
+            # require at least 75% of portfolio weight coverage for reliable estimation
+            if total_wt >= 0.75:
                 return total_prod / total_wt
+            else:
+                logger.warning(f"Insufficient coverage ({total_wt*100:.1f}% < 75%), skipping D-1 estimation")
         except Exception as e:
             logger.error(f"yfinance history fetch failed: {e}")
 
