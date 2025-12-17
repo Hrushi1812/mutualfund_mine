@@ -1,6 +1,9 @@
 import pandas as pd
 import csv
 import requests
+import os
+import re
+import time
 from io import StringIO
 from bson import ObjectId
 from db import holdings_collection, users_collection
@@ -8,14 +11,78 @@ from typing import List, Optional
 import difflib
 
 from datetime import datetime
-from utils.common import NSE_HEADERS, NSE_CSV_URL
+from utils.common import NSE_HEADERS, NSE_CSV_URL, FYERS_BSE_CM_URL
 from utils.date_utils import format_date_for_api
 from core.logging import get_logger
 
 logger = get_logger("HoldingsService")
 
+# Dev-only debug logging - set to False for production
+DEBUG_HOLDINGS = os.getenv("DEBUG_HOLDINGS", "false").lower() == "false"
+
 session = requests.Session()
 session.headers.update(NSE_HEADERS)
+
+_FYERS_BSE_ISIN_MAP = None  # type: Optional[dict]
+_FYERS_BSE_ISIN_MAP_LOADED_AT = 0.0
+_FYERS_BSE_ISIN_MAP_TTL_SECONDS = 24 * 60 * 60
+_ISIN_RE = re.compile(r"\b[A-Z0-9]{12}\b")
+
+
+def _extract_fyers_symbol(line: str, exchange_prefix: str) -> Optional[str]:
+    idx = line.find(f"{exchange_prefix}:")
+    if idx < 0:
+        return None
+    end = line.find(",", idx)
+    if end < 0:
+        end = len(line)
+    sym = line[idx:end].strip()
+    return sym or None
+
+
+def load_fyers_bse_isin_map(force: bool = False) -> dict:
+    """Loads a mapping of ISIN -> FYERS BSE symbol (e.g., 'BSE:SBICARD-A').
+
+    Uses FYERS public BSE symbol master file and caches it in-memory.
+    """
+    global _FYERS_BSE_ISIN_MAP, _FYERS_BSE_ISIN_MAP_LOADED_AT
+
+    now = time.time()
+    if (
+        not force
+        and _FYERS_BSE_ISIN_MAP is not None
+        and (now - _FYERS_BSE_ISIN_MAP_LOADED_AT) < _FYERS_BSE_ISIN_MAP_TTL_SECONDS
+    ):
+        return _FYERS_BSE_ISIN_MAP
+
+    mapping: dict = {}
+    try:
+        with requests.get(FYERS_BSE_CM_URL, stream=True, timeout=30) as r:
+            r.raise_for_status()
+            for raw in r.iter_lines(decode_unicode=True):
+                if not raw:
+                    continue
+                line = raw.strip()
+                if "BSE:" not in line:
+                    continue
+
+                m = _ISIN_RE.search(line)
+                if not m:
+                    continue
+                isin = m.group(0).upper()
+
+                sym = _extract_fyers_symbol(line, "BSE")
+                if sym:
+                    mapping[isin] = sym
+
+        _FYERS_BSE_ISIN_MAP = mapping
+        _FYERS_BSE_ISIN_MAP_LOADED_AT = now
+        return mapping
+    except Exception as e:
+        logger.warning(f"Failed to load FYERS BSE symbol master: {e}")
+        _FYERS_BSE_ISIN_MAP = {}
+        _FYERS_BSE_ISIN_MAP_LOADED_AT = now
+        return _FYERS_BSE_ISIN_MAP
 
 def load_nse_csv():
     """Downloads and caches the NSE Equity Master List (CSV)."""
@@ -232,10 +299,36 @@ class HoldingsService:
              return {"error": f"Missing columns. Found: {df.columns.tolist()}"}
         
         # 4. Clean Data
+        count_before_dropna = len(df)
         df = df.dropna(subset=["ISIN"])
+        count_after_dropna = len(df)
+        
         df["ISIN"] = df["ISIN"].astype(str).str.strip().str.upper()
+        
+        # Track invalid ISINs before filtering
+        invalid_isin_mask = ~df["ISIN"].str.match(r'^[A-Z0-9]{12}$', na=False)
+        invalid_isins = df[invalid_isin_mask][["ISIN", "Name"]].to_dict('records') if "Name" in df.columns else df[invalid_isin_mask]["ISIN"].tolist()
+        
         df = df[df["ISIN"].str.match(r'^[A-Z0-9]{12}$', na=False)]
+        count_after_isin_filter = len(df)
+        
+        # Track duplicates before removing
+        duplicates = df[df.duplicated(subset=["ISIN"], keep="first")][["ISIN", "Name"]].to_dict('records') if "Name" in df.columns else []
+        
         df = df.drop_duplicates(subset=["ISIN"], keep="first")
+        count_after_dedup = len(df)
+        
+        # DEBUG LOGGING
+        if DEBUG_HOLDINGS:
+            logger.info(f"=== HOLDINGS DEBUG: {fund_name} ===")
+            logger.info(f"  Rows after header parse: {count_before_dropna}")
+            logger.info(f"  After dropna(ISIN): {count_after_dropna} (dropped {count_before_dropna - count_after_dropna})")
+            logger.info(f"  After ISIN format filter: {count_after_isin_filter} (dropped {count_after_dropna - count_after_isin_filter})")
+            if invalid_isins:
+                logger.info(f"  Invalid ISINs removed: {invalid_isins[:10]}{'...' if len(invalid_isins) > 10 else ''}")
+            logger.info(f"  After dedup: {count_after_dedup} (dropped {count_after_isin_filter - count_after_dedup} duplicates)")
+            if duplicates:
+                logger.info(f"  Duplicates removed: {duplicates[:5]}{'...' if len(duplicates) > 5 else ''}")
         
         def clean_weight(val):
             try:
@@ -246,22 +339,53 @@ class HoldingsService:
             
         df["Weight"] = df["Weight"].apply(clean_weight)
 
-        # 5. Resolve Tickers
+        # 5. Resolve Tickers (NSE first, then FYERS BSE fallback)
         nse_source = load_nse_csv()
         holdings_list = []
         unresolved = []
+        zero_weight_skipped = []
+
+        resolved_nse = 0
+        resolved_bse = 0
+        bse_isin_map = None
 
         for _, row in df.iterrows():
             isin = row["ISIN"]
             name = row.get("Name", "Unknown")
             weight = float(row["Weight"])
-            if weight <= 0: continue
+            if weight <= 0:
+                zero_weight_skipped.append(f"{name} ({isin})")
+                continue
             
             ticker = isin_to_symbol_nse(isin, nse_table=nse_source)
             if ticker:
                 holdings_list.append({"ISIN": isin, "Name": name, "Symbol": ticker, "Weight": weight})
+                resolved_nse += 1
             else:
-                unresolved.append(f"{name} ({isin})")
+                if bse_isin_map is None:
+                    bse_isin_map = load_fyers_bse_isin_map()
+
+                bse_symbol = (bse_isin_map or {}).get(isin)
+                if bse_symbol:
+                    # Store fully-qualified FYERS symbol so downstream quotes work (e.g., BSE:SBICARD-A)
+                    holdings_list.append({"ISIN": isin, "Name": name, "Symbol": bse_symbol, "Weight": weight})
+                    resolved_bse += 1
+                else:
+                    unresolved.append(f"{name} ({isin})")
+        
+        # DEBUG LOGGING - Final Summary
+        if DEBUG_HOLDINGS:
+            logger.info(f"  === TICKER RESOLUTION ===")
+            logger.info(f"  Resolved via NSE master: {resolved_nse}")
+            logger.info(f"  Resolved via BSE fallback: {resolved_bse}")
+            logger.info(f"  Total resolved: {len(holdings_list)}")
+            logger.info(f"  Zero weight skipped: {len(zero_weight_skipped)}")
+            if zero_weight_skipped:
+                logger.info(f"    Skipped: {zero_weight_skipped[:5]}{'...' if len(zero_weight_skipped) > 5 else ''}")
+            logger.info(f"  Unresolved (no NSE/BSE symbol): {len(unresolved)}")
+            if unresolved:
+                logger.info(f"    Unresolved: {unresolved[:10]}{'...' if len(unresolved) > 10 else ''}")
+            logger.info(f"  === FINAL: {len(holdings_list)} holdings saved ===")
         
         if not holdings_list:
             return {"error": "No valid holdings resolved."}

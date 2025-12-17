@@ -11,5 +11,10 @@ class Settings:
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     # Default to localhost for development, can be overridden by env var (comma separated)
     CORS_ORIGINS: list[str] = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+    
+    # Fyers API Configuration
+    FYERS_APP_ID: str = os.getenv("FYERS_APP_ID", "DXGLWQ4E2O-100")
+    FYERS_SECRET_KEY: str = os.getenv("FYERS_SECRET_KEY", "")  # <-- SET THIS IN .env FILE
+    FYERS_REDIRECT_URI: str = os.getenv("FYERS_REDIRECT_URI", "http://localhost:8000/api/fyers/callback")
 
 settings = Settings()

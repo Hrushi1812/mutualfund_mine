@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from routes import auth, holdings, portfolio
+from routes import auth, holdings, portfolio, fyers
 from db import client
 from core.logging import setup_logging, get_logger
 from core.config import settings
@@ -43,6 +43,7 @@ def startup_db_client():
 app.include_router(auth.router)
 app.include_router(holdings.router)
 app.include_router(portfolio.router)
+app.include_router(fyers.router)
 
 @app.get("/")
 def home():

@@ -2,6 +2,7 @@ from datetime import datetime, date, timedelta
 import time
 import requests
 from services.holdings_service import holdings_service, session
+from services.fyers_service import fyers_service
 from utils.date_utils import (
     is_market_open,
     get_current_ist_time,
@@ -18,6 +19,37 @@ logger = get_logger("NavService")
 
 
 class NavService:
+    # ==================== FYERS-BASED METHODS (PRIMARY) ====================
+    
+    @staticmethod
+    def get_live_price_change_fyers(symbol):
+        """
+        Fetches live P-Change using Fyers API.
+        Returns float (e.g., 1.25 for +1.25%) or None.
+        """
+        if not fyers_service.is_authenticated():
+            logger.debug(f"Fyers not authenticated, falling back to NSE for {symbol}")
+            return NavService.get_live_price_change_nse(symbol)
+        
+        try:
+            pct = fyers_service.get_quote_pct_change(symbol)
+            if pct is not None:
+                return float(pct)
+        except Exception as e:
+            logger.debug(f"Fyers quote failed for {symbol}: {e}")
+        
+        # Fallback to NSE
+        return NavService.get_live_price_change_nse(symbol)
+
+    @staticmethod
+    def get_live_price_change(symbol, max_retries=3):
+        """
+        Primary method: Uses Fyers if authenticated, falls back to NSE scraping.
+        """
+        return NavService.get_live_price_change_fyers(symbol)
+
+    # ==================== NSE FALLBACK METHODS ====================
+
     @staticmethod
     def ensure_nse_cookies():
         """Ensures that the session has valid cookies from NSE home page."""
@@ -35,8 +67,8 @@ class NavService:
                  logger.error(f"Failed to initialize NSE cookies: {e}")
 
     @staticmethod
-    def get_live_price_change(symbol, max_retries=3):
-        """Fetches live P-Change from NSE for a symbol (expected symbol format e.g. 'RELIANCE').
+    def get_live_price_change_nse(symbol, max_retries=3):
+        """Fetches live P-Change from NSE for a symbol (FALLBACK method).
         Includes retry logic with exponential backoff for robustness.
         """
         for attempt in range(max_retries):
@@ -70,13 +102,13 @@ class NavService:
                     logger.debug(f"Timeout for {symbol}, retry {attempt+1}")
                     time.sleep(1)
                     continue
-                logger.debug(f"get_live_price_change({symbol}) timed out after {max_retries} attempts")
+                logger.debug(f"get_live_price_change_nse({symbol}) timed out after {max_retries} attempts")
                 return None
             except Exception as e:
                 if attempt < max_retries - 1:
                     time.sleep(0.5)
                     continue
-                logger.debug(f"get_live_price_change({symbol}) failed: {e}")
+                logger.debug(f"get_live_price_change_nse({symbol}) failed: {e}")
                 return None
         return None
 
@@ -149,14 +181,10 @@ class NavService:
     @staticmethod
     def calculate_portfolio_change(holdings):
         """
-        Calculates the weighted average percent change (intraday live) of the portfolio using parallel fetching.
-        We expect holdings to have "Symbol" and "Weight" (either fraction 0..1 or percent like 5.5).
-        Returns weighted pct change (e.g., 1.23 for +1.23%) or None if insufficient coverage.
+        Calculates the weighted average percent change (intraday live) of the portfolio.
+        Uses Fyers bulk quotes if authenticated, falls back to parallel NSE fetching.
         
-        Optimized for maximum coverage with:
-        - Reduced parallelism (5 workers) to avoid NSE rate limiting
-        - Retry logic in get_live_price_change
-        - Two-pass approach: first pass parallel, second pass retry failures sequentially
+        Returns weighted pct change (e.g., 1.23 for +1.23%) or None if insufficient coverage.
         """
         import concurrent.futures
 
@@ -170,11 +198,49 @@ class NavService:
         if total_stocks == 0:
             return None
 
-        # Ensure we have cookies before starting parallel requests
-        NavService.ensure_nse_cookies()
-
         logger.info(f"Starting live price fetch for {total_stocks} stocks...")
         start_time = time.time()
+
+        # ============ TRY FYERS BULK QUOTES FIRST ============
+        if fyers_service.is_authenticated():
+            logger.info("Using Fyers API for bulk quotes...")
+            symbols = [s.get("Symbol") for s in valid_stocks]
+            pct_changes = fyers_service.get_bulk_quotes_pct_change(symbols)
+            
+            for stock in valid_stocks:
+                sym = stock.get("Symbol")
+                wt = float(stock.get("Weight", 0) or 0)
+                if wt > 1:
+                    wt = wt / 100.0
+                
+                pct = pct_changes.get(sym)
+                if pct is not None:
+                    total_prod += (wt * pct)
+                    total_wt += wt
+                    stocks_checked += 1
+
+            duration = time.time() - start_time
+            logger.info(f"Fyers bulk fetch completed in {duration:.2f}s. Valid: {stocks_checked}/{total_stocks}, Coverage: {total_wt*100:.1f}%")
+
+            if total_wt >= 0.75:
+                return total_prod / total_wt
+            else:
+                logger.warning(f"Insufficient Fyers coverage ({total_wt*100:.1f}% < 75%), trying NSE fallback...")
+
+        # ============ FALLBACK TO NSE SCRAPING ============
+        logger.info("Using NSE scraping fallback...")
+        total_prod = 0.0
+        total_wt = 0.0
+        stocks_checked = 0
+
+        # NSE fallback can only handle plain NSE symbols (no exchange prefix)
+        valid_stocks = [s for s in valid_stocks if ":" not in (s.get("Symbol") or "")]
+        total_stocks = len(valid_stocks)
+        if total_stocks == 0:
+            return None
+        
+        # Ensure we have cookies before starting parallel requests
+        NavService.ensure_nse_cookies()
         
         # Track results and failures for retry
         results = {}  # symbol -> (weight, pct_change)
@@ -186,7 +252,7 @@ class NavService:
             wt = float(stock.get("Weight", 0) or 0)
             if wt > 1:
                 wt = wt / 100.0
-            pct = NavService.get_live_price_change(sym)
+            pct = NavService.get_live_price_change_nse(sym)
             return (sym, wt, pct)
 
         # PASS 1: Parallel fetch with reduced concurrency to avoid rate limiting
@@ -227,7 +293,7 @@ class NavService:
                     except Exception:
                         pass
                 
-                pct = NavService.get_live_price_change(sym, max_retries=2)
+                pct = NavService.get_live_price_change_nse(sym, max_retries=2)
                 if pct is not None:
                     results[sym] = (wt, pct)
                     total_prod += (wt * pct)
@@ -235,7 +301,7 @@ class NavService:
                     stocks_checked += 1
 
         duration = time.time() - start_time
-        logger.info(f"Live fetch completed in {duration:.2f}s. Valid: {stocks_checked}/{total_stocks}, Coverage: {total_wt*100:.1f}%")
+        logger.info(f"NSE fetch completed in {duration:.2f}s. Valid: {stocks_checked}/{total_stocks}, Coverage: {total_wt*100:.1f}%")
 
         # require at least 75% of portfolio weight coverage for reliable estimation
         if total_wt >= 0.75:
@@ -256,11 +322,67 @@ class NavService:
     def get_historical_portfolio_change(holdings, target_date):
         """
         Calculates weighted average percent change for a specific historical date (target_date - a date object).
-        Uses yfinance to fetch historical close prices and computes pct change for target_date = (close[t] - close[t-1]) / close[t-1] * 100.
+        Uses Fyers if authenticated, falls back to yfinance.
         Returns weighted pct (e.g., 1.23 for +1.23%) or None if insufficient coverage.
         """
+        valid_stocks = [s for s in holdings if s.get("Symbol") and s.get("Weight", 0) > 0]
+        if not valid_stocks:
+            return None
+
+        # ============ TRY FYERS FIRST ============
+        if fyers_service.is_authenticated():
+            logger.info(f"Using Fyers for historical data on {target_date}...")
+            total_prod = 0.0
+            total_wt = 0.0
+            stocks_checked = 0
+
+            # Convert target_date to datetime if needed
+            if isinstance(target_date, date) and not isinstance(target_date, datetime):
+                target_dt = datetime.combine(target_date, datetime.min.time())
+            else:
+                target_dt = target_date
+
+            for stock in valid_stocks:
+                sym = stock["Symbol"]
+                wt = float(stock.get("Weight", 0) or 0)
+                if wt > 1:
+                    wt = wt / 100.0
+
+                pct = fyers_service.get_historical_pct_change(sym, target_dt)
+                if pct is not None:
+                    total_prod += wt * pct
+                    total_wt += wt
+                    stocks_checked += 1
+
+            logger.info(f"Fyers historical fetch complete. Valid: {stocks_checked}/{len(valid_stocks)}, Coverage: {total_wt*100:.1f}%")
+
+            if total_wt >= 0.75:
+                return total_prod / total_wt
+            else:
+                logger.warning(f"Insufficient Fyers historical coverage ({total_wt*100:.1f}% < 75%), trying yfinance fallback...")
+
+        # ============ FALLBACK TO YFINANCE ============
+        return NavService._get_historical_portfolio_change_yfinance(holdings, target_date)
+
+    @staticmethod
+    def _get_historical_portfolio_change_yfinance(holdings, target_date):
+        """
+        FALLBACK: Uses yfinance to fetch historical close prices.
+        """
+        import os
+        from pathlib import Path
         import yfinance as yf
         import pandas as pd
+
+        # yfinance may fail to initialise its default Windows cache dir if a file exists
+        # where it expects a folder (e.g. %LOCALAPPDATA%\py-yfinance). Point it to a
+        # project-local, writable directory to avoid noisy logs.
+        try:
+            cache_dir = Path(__file__).resolve().parents[1] / "logs" / "py-yfinance"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            yf.set_tz_cache_location(str(cache_dir))
+        except Exception:
+            pass
 
         valid_stocks = [s for s in holdings if s.get("Symbol") and s.get("Weight", 0) > 0]
         if not valid_stocks:
@@ -339,7 +461,7 @@ class NavService:
                     total_wt += wt
                     stocks_checked += 1
 
-            logger.info(f"Historical fetch complete. Valid: {stocks_checked}/{len(valid_stocks)}, Coverage: {total_wt*100:.1f}%")
+            logger.info(f"yfinance historical fetch complete. Valid: {stocks_checked}/{len(valid_stocks)}, Coverage: {total_wt*100:.1f}%")
 
             # require at least 75% of portfolio weight coverage for reliable estimation
             if total_wt >= 0.75:

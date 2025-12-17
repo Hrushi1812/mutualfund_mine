@@ -9,6 +9,10 @@ venv/
 # Specific environment file
 backend/.env
 
+# Fyers token cache (contains auth tokens)
+.fyers_token.json
+backend/.fyers_token.json
+
 # React/Node
 node_modules/
 dist/
