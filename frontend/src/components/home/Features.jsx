@@ -1,9 +1,14 @@
 import React from "react";
 import GlassCard from "../ui/GlassCard";
-import { TrendingUp, PieChart, Clock, Shield } from "lucide-react";
+import { TrendingUp, PieChart, Clock, Shield, Zap } from "lucide-react";
 
-const FeatureItem = ({ icon: Icon, title, description }) => (
-    <GlassCard className="flex flex-col items-start gap-4">
+const FeatureItem = ({ icon: Icon, title, description, badge }) => (
+    <GlassCard className="flex flex-col items-start gap-4 relative">
+        {badge && (
+            <span className="absolute top-4 right-4 text-[10px] font-medium px-2 py-0.5 bg-primary/20 text-primary rounded-full">
+                {badge}
+            </span>
+        )}
         <div className="p-3 rounded-xl bg-primary/10 text-primary">
             <Icon size={24} />
         </div>
@@ -17,23 +22,29 @@ const Features = () => {
         {
             icon: TrendingUp,
             title: "Real-time NAV Tracking",
-            description: "Stay updated with the latest Net Asset Values of your mutual funds instantly."
+            description: "Stay updated with the latest Net Asset Values of your mutual funds instantly.",
+        },
+        {
+            icon: Zap,
+            title: "Live Stock Prices",
+            description: "Optionally connect Fyers (free) for real-time stock prices, or use delayed data - your choice. App works either way!",
+            badge: "Optional",
         },
         {
             icon: PieChart,
             title: "Portfolio Analysis",
-            description: "Deep dive into your portfolio allocation and performance metrics."
+            description: "Deep dive into your portfolio allocation and performance metrics.",
         },
         {
             icon: Clock,
             title: "Historical Data",
-            description: "Analyze past performance trends to make informed investment decisions."
+            description: "Analyze past performance trends to make informed investment decisions.",
         },
         {
             icon: Shield,
             title: "Secure & Private",
-            description: "Your financial data is encrypted and stored locally for maximum privacy."
-        }
+            description: "Your financial data is encrypted and stored locally for maximum privacy.",
+        },
     ];
 
     return (
@@ -48,7 +59,7 @@ const Features = () => {
                     </p>
                 </div>
 
-                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                     {features.map((feature, index) => (
                         <FeatureItem key={index} {...feature} />
                     ))}

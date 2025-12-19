@@ -1,15 +1,18 @@
 import React, { useState, useContext } from 'react';
-import { LayoutDashboard, LogOut, PieChart, User } from 'lucide-react';
+import { LayoutDashboard, LogOut, PieChart, User, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import UploadHoldings from '../components/dashboard/UploadHoldings';
 import FundList from '../components/dashboard/FundList';
 import PortfolioAnalyzer from '../components/dashboard/PortfolioAnalyzer';
+import FyersBanner from '../components/dashboard/FyersBanner';
+import FyersConnectionCard from '../components/dashboard/FyersConnectionCard';
 import { AuthContext } from '../context/AuthContext';
 
 const Dashboard = () => {
     const navigate = useNavigate();
     const { user, logout } = useContext(AuthContext);
     const [selectedFund, setSelectedFund] = useState(null);
+    const [showSettings, setShowSettings] = useState(false);
 
     const handleLogout = () => {
         logout();
@@ -28,13 +31,20 @@ const Dashboard = () => {
                         <h1 className="text-xl font-bold tracking-tight">Mutual Fund Tracker</h1>
                     </div>
 
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-4">
                         {user && (
                             <div className="flex items-center gap-2 text-sm font-medium text-white/80 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
                                 <User className="w-4 h-4 text-brand-accent" />
                                 <span>Hi, {user.username}</span>
                             </div>
                         )}
+                        <button
+                            onClick={() => setShowSettings(!showSettings)}
+                            className={`p-2 rounded-lg transition-colors ${showSettings ? 'bg-accent/20 text-accent' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
+                            title="Settings"
+                        >
+                            <Settings className="w-5 h-5" />
+                        </button>
                         <button
                             onClick={handleLogout}
                             className="flex items-center gap-2 text-sm font-medium text-zinc-400 hover:text-white transition-colors"
@@ -48,6 +58,9 @@ const Dashboard = () => {
 
             {/* Main Content */}
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+                
+                {/* Fyers Banner - Shows when reconnection needed */}
+                <FyersBanner />
 
                 {/* Welcome Section */}
                 <div>
@@ -56,15 +69,21 @@ const Dashboard = () => {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    {/* Left Column (Upload & Lists) - Weighted larger */}
-                    <div className="lg:col-span-12 space-y-8">
+                    {/* Main Column */}
+                    <div className={`${showSettings ? 'lg:col-span-8' : 'lg:col-span-12'} space-y-8`}>
                         <UploadHoldings />
 
-                        {/* We'll wrap FundList in a similar card style later or now */}
                         <div className="bg-white/5 border border-white/5 rounded-2xl p-6 shadow-xl">
                             <FundList onSelect={(fund) => setSelectedFund(fund)} />
                         </div>
                     </div>
+                    
+                    {/* Settings Sidebar */}
+                    {showSettings && (
+                        <div className="lg:col-span-4 space-y-6">
+                            <FyersConnectionCard />
+                        </div>
+                    )}
                 </div>
             </main>
 

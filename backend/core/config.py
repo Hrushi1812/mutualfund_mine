@@ -3,6 +3,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Detect environment: production if RENDER or PRODUCTION env var is set
+IS_PRODUCTION = os.getenv("RENDER") or os.getenv("PRODUCTION") or os.getenv("ENV") == "production"
+
 class Settings:
     MONGO_URI: str = os.getenv("MONGO_URI", "mongodb://localhost:27017")
     MONGO_DB: str = os.getenv("MONGO_DB", "mutual_funds")
@@ -15,6 +18,12 @@ class Settings:
     # Fyers API Configuration
     FYERS_APP_ID: str = os.getenv("FYERS_APP_ID", "DXGLWQ4E2O-100")
     FYERS_SECRET_KEY: str = os.getenv("FYERS_SECRET_KEY", "")  # <-- SET THIS IN .env FILE
-    FYERS_REDIRECT_URI: str = os.getenv("FYERS_REDIRECT_URI", "http://localhost:8000/api/fyers/callback")
+    
+    # Auto-detect redirect URI based on environment
+    FYERS_REDIRECT_URI: str = os.getenv(
+        "FYERS_REDIRECT_URI",
+        "https://mutualfund-tracker.onrender.com/api/fyers/callback" if IS_PRODUCTION 
+        else "http://localhost:8000/api/fyers/callback"
+    )
 
 settings = Settings()

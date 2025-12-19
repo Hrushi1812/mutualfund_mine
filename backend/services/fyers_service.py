@@ -134,10 +134,43 @@ class FyersService:
         logger.info("Fyers token set directly")
 
     def is_authenticated(self) -> bool:
-        """Check if we have a valid token."""
+        """Check if we have a valid (non-expired) cached token."""
         if not self._access_token or not self._token_expiry:
             return False
         return datetime.now() < self._token_expiry
+
+    def validate_token_live(self) -> bool:
+        """
+        Perform a lightweight API call to verify the token is actually valid.
+        This catches cases where token is cached but revoked/expired on broker side.
+        """
+        if not self._access_token:
+            return False
+        
+        try:
+            # Use profile API as lightweight validation
+            response = self._fyers.get_profile()
+            if response.get("s") == "ok":
+                logger.debug("Fyers token validated via live API call")
+                return True
+            else:
+                logger.warning(f"Fyers token validation failed: {response}")
+                return False
+        except Exception as e:
+            logger.warning(f"Fyers token validation error: {e}")
+            return False
+
+    def clear_token(self):
+        """Clear the cached token (disconnect)."""
+        self._access_token = None
+        self._token_expiry = None
+        self._fyers = None
+        try:
+            if TOKEN_FILE.exists():
+                TOKEN_FILE.unlink()
+            logger.info("Fyers token cleared")
+        except Exception as e:
+            logger.warning(f"Failed to delete token file: {e}")
 
     @staticmethod
     def format_symbol(symbol: str, exchange: str = "NSE") -> str:

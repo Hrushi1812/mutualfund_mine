@@ -17,8 +17,8 @@ from core.logging import get_logger
 
 logger = get_logger("HoldingsService")
 
-# Dev-only debug logging - set to False for production
-DEBUG_HOLDINGS = os.getenv("DEBUG_HOLDINGS", "false").lower() == "false"
+# Dev-only debug logging - set to True to enable
+DEBUG_HOLDINGS = os.getenv("DEBUG_HOLDINGS", "false").lower() == "true"
 
 session = requests.Session()
 session.headers.update(NSE_HEADERS)

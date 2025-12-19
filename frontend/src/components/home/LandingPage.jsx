@@ -4,6 +4,7 @@ import Footer from "../layout/Footer";
 import Hero from "./Hero";
 import Features from "./Features";
 import HowItWorks from "./HowItWorks";
+import FyersInfo from "./FyersInfo";
 import DemoSection from "./DemoSection";
 import CTA from "./CTA";
 
@@ -15,6 +16,7 @@ const LandingPage = () => {
                 <Hero />
                 <Features />
                 <HowItWorks />
+                <FyersInfo />
                 <DemoSection />
                 <CTA />
             </main>

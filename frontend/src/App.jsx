@@ -7,6 +7,7 @@ import RegisterPage from "./pages/RegisterPage";
 import Dashboard from "./pages/Dashboard";
 import { AuthProvider } from "./context/AuthContext";
 import { PortfolioProvider } from "./context/PortfolioContext";
+import { FyersProvider } from "./context/FyersContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -32,23 +33,25 @@ function App() {
 
   return (
     <AuthProvider>
-      <PortfolioProvider>
-        <Router>
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
-        </Router>
-      </PortfolioProvider>
+      <FyersProvider>
+        <PortfolioProvider>
+          <Router>
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
+          </Router>
+        </PortfolioProvider>
+      </FyersProvider>
     </AuthProvider>
   );
 }

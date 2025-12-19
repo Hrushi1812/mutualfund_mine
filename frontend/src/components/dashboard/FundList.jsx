@@ -1,10 +1,15 @@
-import React, { useContext } from 'react';
-import { Database, RefreshCw, ChevronRight, Trash2, AlertCircle } from 'lucide-react';
+import React, { useContext, useState } from 'react';
+import { Database, RefreshCw, ChevronRight, Trash2, AlertCircle, Zap, Clock } from 'lucide-react';
 import api from '../../api';
 import { PortfolioContext } from '../../context/PortfolioContext';
+import { FyersContext } from '../../context/FyersContext';
 
 const FundList = ({ onSelect }) => {
     const { funds, loading, fetchFunds } = useContext(PortfolioContext);
+    const fyersContext = useContext(FyersContext);
+    const isLiveData = fyersContext?.isConnected;
+    const userOptedOut = fyersContext?.userOptedOut;
+    const [connectingFyers, setConnectingFyers] = useState(false);
 
     const handleDelete = async (e, fundId, fundName) => {
         e.stopPropagation(); // Prevent opening the analyzer
@@ -19,13 +24,51 @@ const FundList = ({ onSelect }) => {
         }
     };
 
+    const handleConnectFyers = async () => {
+        if (!fyersContext) return;
+        try {
+            setConnectingFyers(true);
+            // First, opt back in if user had opted out
+            if (userOptedOut) {
+                fyersContext.toggleOptOut(false);
+            }
+            const authUrl = await fyersContext.getAuthUrl();
+            window.open(authUrl, '_blank', 'width=600,height=700');
+            // No polling here - FyersConnectionCard handles polling when user clicks there
+            // User can refresh or the banner will show status
+        } catch (err) {
+            console.error('Failed to start Fyers auth:', err);
+        } finally {
+            setConnectingFyers(false);
+        }
+    };
+
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-                    <Database className="w-5 h-5 text-accent" />
-                    Your Portfolios
-                </h2>
+                <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+                        <Database className="w-5 h-5 text-accent" />
+                        Your Portfolios
+                    </h2>
+                    {/* Data source indicator - clickable when in delayed mode */}
+                    {isLiveData ? (
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-500/10 text-green-400 border border-green-500/20">
+                            <Zap className="w-3 h-3" />
+                            Live
+                        </div>
+                    ) : (
+                        <button
+                            onClick={handleConnectFyers}
+                            disabled={connectingFyers}
+                            className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-500/10 text-zinc-400 border border-zinc-500/20 hover:bg-amber-500/10 hover:text-amber-400 hover:border-amber-500/20 transition-colors cursor-pointer"
+                            title="Click to connect Fyers for live data"
+                        >
+                            <Clock className="w-3 h-3" />
+                            {connectingFyers ? 'Connecting...' : 'Delayed · Upgrade'}
+                        </button>
+                    )}
+                </div>
                 <button
                     onClick={fetchFunds}
                     className="p-2 hover:bg-white/5 rounded-full transition-colors text-zinc-400 hover:text-white"

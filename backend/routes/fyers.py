@@ -79,16 +79,41 @@ def fyers_callback(
 
 
 @router.get("/status")
-def get_fyers_status():
-    """Check if Fyers API is authenticated and working."""
+def get_fyers_status(validate: bool = False):
+    """
+    Check if Fyers API is authenticated.
+    
+    Args:
+        validate: If True, performs a live API call to verify token is actually valid
+                  (not just cached). Useful on app startup.
+    """
     is_auth = fyers_service.is_authenticated()
+    
+    # Optional live validation - makes a lightweight API call
+    live_valid = None
+    if validate and is_auth:
+        live_valid = fyers_service.validate_token_live()
+        if not live_valid:
+            is_auth = False  # Token is cached but actually invalid/revoked
     
     return {
         "authenticated": is_auth,
+        "configured": bool(fyers_service.app_id and fyers_service.secret_key),
         "app_id": fyers_service.app_id,
         "token_expiry": fyers_service._token_expiry.isoformat() if fyers_service._token_expiry else None,
-        "message": "Ready" if is_auth else "Not authenticated. Visit /api/fyers/auth-url to connect."
+        "live_validated": live_valid,
+        "message": "Ready" if is_auth else "Not authenticated. Connect Fyers to get live stock data."
     }
+
+
+@router.get("/disconnect")
+def disconnect_fyers():
+    """
+    Clear the Fyers token (logout).
+    User can still use the app with delayed/cached data.
+    """
+    fyers_service.clear_token()
+    return {"success": True, "message": "Fyers disconnected. Live data unavailable."}
 
 
 @router.post("/set-token")

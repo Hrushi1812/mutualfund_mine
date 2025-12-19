@@ -1,15 +1,37 @@
-import React, { useState } from 'react';
-import { X, Calculator, Calendar, IndianRupee, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
+import React, { useState, useContext } from 'react';
+import { X, Calculator, Calendar, IndianRupee, TrendingUp, TrendingDown, Loader2, Clock, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../api';
+import { FyersContext } from '../../context/FyersContext';
 
 const PortfolioAnalyzer = ({ fundId, onClose }) => {
+    // Fyers connection status for showing delayed data notice
+    const fyersContext = useContext(FyersContext);
+    const isUsingDelayedData = fyersContext && !fyersContext.isConnected;
+    const [connectingFyers, setConnectingFyers] = useState(false);
+    
     // State for Analysis Results
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(true); // Start loading immediately
     const [error, setError] = useState(null);
 
     const hasFetched = React.useRef(false);
+
+    const handleConnectFyers = async () => {
+        if (!fyersContext) return;
+        try {
+            setConnectingFyers(true);
+            if (fyersContext.userOptedOut) {
+                fyersContext.toggleOptOut(false);
+            }
+            const authUrl = await fyersContext.getAuthUrl();
+            window.open(authUrl, '_blank', 'width=600,height=700');
+        } catch (err) {
+            console.error('Failed to start Fyers auth:', err);
+        } finally {
+            setConnectingFyers(false);
+        }
+    };
 
     // Auto-analyze on mount
     React.useEffect(() => {
@@ -151,10 +173,24 @@ const PortfolioAnalyzer = ({ fundId, onClose }) => {
                                     </div>
                                     <div className="h-px bg-white/5 w-full my-2"></div>
                                     <div className="flex justify-between items-center">
-                                        <span className="text-sm text-zinc-400">Live NAV (Est)</span>
+                                        <span className="text-sm text-zinc-400">{isUsingDelayedData ? 'NAV (Est)' : 'Live NAV (Est)'}</span>
                                         <span className="font-mono text-white">₹{result.current_nav}</span>
                                     </div>
                                 </div>
+                                
+                                {/* Delayed Data Notice - Clickable to connect Fyers */}
+                                {isUsingDelayedData && (
+                                    <button
+                                        onClick={handleConnectFyers}
+                                        disabled={connectingFyers}
+                                        className="flex items-center justify-center gap-2 text-xs text-amber-400/80 bg-amber-500/10 hover:bg-amber-500/20 p-2 rounded-lg transition-colors w-full"
+                                    >
+                                        <Clock className="w-3.5 h-3.5" />
+                                        {connectingFyers ? 'Opening Fyers login...' : 'Using NSE data (delayed)'}
+                                        <span className="text-amber-300">· Click to get live prices</span>
+                                        <Zap className="w-3 h-3" />
+                                    </button>
+                                )}
 
                                 {/* Note */}
                                 <div className="text-[10px] text-center text-zinc-600 px-4">
