@@ -1,8 +1,71 @@
 import React, { useContext, useState } from 'react';
-import { Database, RefreshCw, ChevronRight, Trash2, AlertCircle, Zap, Clock } from 'lucide-react';
+import { Database, RefreshCw, ChevronRight, Trash2, AlertCircle, Zap, Clock, RefreshCcw } from 'lucide-react';
 import api from '../../api';
 import { PortfolioContext } from '../../context/PortfolioContext';
 import { FyersContext } from '../../context/FyersContext';
+
+// Reusable Fund Card Component
+const FundCard = ({ fund, onSelect, onDelete, isSIP = false }) => (
+    <div
+        onClick={() => onSelect && onSelect(fund.id)}
+        className={`bg-white/5 border p-4 rounded-xl transition-all cursor-pointer group active:scale-[0.98] relative ${isSIP
+                ? 'border-purple-500/20 hover:border-purple-500/50'
+                : 'border-white/5 hover:border-accent/50'
+            }`}
+    >
+        {/* SIP indicator stripe */}
+        {isSIP && (
+            <div className="absolute left-0 top-3 bottom-3 w-0.5 bg-gradient-to-b from-blue-500 to-purple-500 rounded-full"></div>
+        )}
+
+        <div className="flex justify-between items-center">
+            <div className={`flex-1 overflow-hidden ${isSIP ? 'pl-2' : ''}`}>
+                <h3 className="font-semibold text-foreground truncate pr-8 flex items-center gap-2">
+                    {fund.nickname || fund.fund_name}
+                    {isSIP && (
+                        <RefreshCcw className="w-3 h-3 text-purple-400" />
+                    )}
+                    {fund.is_stale && (
+                        <div className="group/tooltip relative">
+                            <AlertCircle className="w-4 h-4 text-amber-500" />
+                            <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2 py-1 text-xs bg-zinc-800 text-white rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
+                                Update Required
+                            </span>
+                        </div>
+                    )}
+                </h3>
+                {fund.nickname && (
+                    <p className="text-xs text-zinc-500 truncate mb-1">
+                        {fund.fund_name}
+                    </p>
+                )}
+                <p className="text-xs text-zinc-400 mt-1 flex items-center gap-2">
+                    {fund.invested_amount ? (
+                        <>
+                            <span className="text-zinc-300">₹{fund.invested_amount} invested</span>
+                            <span className="w-1 h-1 rounded-full bg-zinc-600"></span>
+                        </>
+                    ) : null}
+                    {fund.invested_date ? (
+                        <span>Started {fund.invested_date}</span>
+                    ) : (
+                        <span>Click to Analyze</span>
+                    )}
+                </p>
+            </div>
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={(e) => onDelete(e, fund.id, fund.fund_name)}
+                    className="p-2 hover:bg-red-500/20 text-zinc-500 hover:text-red-500 rounded-lg transition-colors z-10"
+                    title="Delete Portfolio"
+                >
+                    <Trash2 className="w-4 h-4" />
+                </button>
+                <ChevronRight className={`w-5 h-5 transition-colors ${isSIP ? 'text-purple-400 group-hover:text-purple-300' : 'text-zinc-400 group-hover:text-accent'}`} />
+            </div>
+        </div>
+    </div>
+);
 
 const FundList = ({ onSelect }) => {
     const { funds, loading, fetchFunds } = useContext(PortfolioContext);
@@ -83,58 +146,38 @@ const FundList = ({ onSelect }) => {
                     <p className="text-zinc-400">No portfolios found. Upload one to get started.</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {funds.map((fund, index) => (
-                        <div
-                            key={fund.id}
-                            onClick={() => onSelect && onSelect(fund.id)}
-                            className="bg-white/5 border border-white/5 hover:border-accent/50 p-4 rounded-xl transition-all cursor-pointer group active:scale-[0.98] relative"
-                        >
-                            <div className="flex justify-between items-center">
-                                <div className="flex-1 overflow-hidden">
-                                    <h3 className="font-semibold text-foreground truncate pr-8 flex items-center gap-2">
-                                        {fund.nickname || fund.fund_name}
-                                        {fund.is_stale && (
-                                            <div className="group/tooltip relative">
-                                                <AlertCircle className="w-4 h-4 text-amber-500" />
-                                                <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2 py-1 text-xs bg-zinc-800 text-white rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
-                                                    Update Required
-                                                </span>
-                                            </div>
-                                        )}
-                                    </h3>
-                                    {fund.nickname && (
-                                        <p className="text-xs text-zinc-500 truncate mb-1">
-                                            {fund.fund_name}
-                                        </p>
-                                    )}
-                                    <p className="text-xs text-zinc-400 mt-1 flex items-center gap-2">
-                                        {fund.invested_amount ? (
-                                            <>
-                                                <span className="text-zinc-300">₹{fund.invested_amount} invested</span>
-                                                <span className="w-1 h-1 rounded-full bg-zinc-600"></span>
-                                            </>
-                                        ) : null}
-                                        {fund.invested_date ? (
-                                            <span>Started {fund.invested_date}</span>
-                                        ) : (
-                                            <span>Click to Analyze</span>
-                                        )}
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={(e) => handleDelete(e, fund.id, fund.fund_name)}
-                                        className="p-2 hover:bg-red-500/20 text-zinc-500 hover:text-red-500 rounded-lg transition-colors z-10"
-                                        title="Delete Portfolio"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                    <ChevronRight className="w-5 h-5 text-zinc-400 group-hover:text-accent transition-colors" />
-                                </div>
+                <div className="space-y-8">
+                    {/* Lumpsum Section */}
+                    {funds.filter(f => f.investment_type !== 'sip').length > 0 && (
+                        <div>
+                            <div className="flex items-center gap-2 mb-4">
+                                <div className="w-1 h-4 bg-primary rounded-full"></div>
+                                <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Lumpsum Investments</h3>
+                                <span className="text-xs text-zinc-500">({funds.filter(f => f.investment_type !== 'sip').length})</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                {funds.filter(f => f.investment_type !== 'sip').map((fund) => (
+                                    <FundCard key={fund.id} fund={fund} onSelect={onSelect} onDelete={handleDelete} />
+                                ))}
                             </div>
                         </div>
-                    ))}
+                    )}
+
+                    {/* SIP Section */}
+                    {funds.filter(f => f.investment_type === 'sip').length > 0 && (
+                        <div>
+                            <div className="flex items-center gap-2 mb-4">
+                                <div className="w-1 h-4 bg-gradient-to-b from-blue-500 to-purple-500 rounded-full"></div>
+                                <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">SIP Investments</h3>
+                                <span className="text-xs text-zinc-500">({funds.filter(f => f.investment_type === 'sip').length})</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                {funds.filter(f => f.investment_type === 'sip').map((fund) => (
+                                    <FundCard key={fund.id} fund={fund} onSelect={onSelect} onDelete={handleDelete} isSIP={true} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

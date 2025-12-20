@@ -41,12 +41,12 @@ const PortfolioAnalyzer = ({ fundId, onClose }) => {
     // Auto-analyze on mount
     React.useEffect(() => {
         if (!hasFetched.current) {
-            handleAnalyze();
+            handleAnalyze(false); // Show SIP modal on initial load
             hasFetched.current = true;
         }
     }, []);
 
-    const handleAnalyze = async () => {
+    const handleAnalyze = async (skipSipModal = false) => {
         setLoading(true);
         setError(null);
         setResult(null);
@@ -61,8 +61,8 @@ const PortfolioAnalyzer = ({ fundId, onClose }) => {
             } else if (response.data && response.data.pnl !== undefined) {
                 setResult(response.data);
 
-                // Check for SIP Pending
-                if (response.data.sip_pending_installments && response.data.sip_pending_installments.length > 0) {
+                // Check for SIP Pending - only show if not suppressed
+                if (!skipSipModal && response.data.sip_pending_installments && response.data.sip_pending_installments.length > 0) {
                     // Show the first pending installment
                     setPendingInstallment(response.data.sip_pending_installments[0]);
                     setShowSipModal(true);
@@ -152,8 +152,9 @@ const PortfolioAnalyzer = ({ fundId, onClose }) => {
                                                 <span className="text-base sm:text-lg font-bold text-white tracking-tight">₹{result.invested_amount}</span>
                                                 <div className="text-[9px] text-zinc-500 mt-1 space-y-0.5">
                                                     <div>Till Upload: ₹{result.manual_invested_amount}</div>
-                                                    <div>Via App: ₹{result.invested_amount - result.manual_invested_amount}</div>
+                                                    <div>After Upload: ₹{result.invested_amount - result.manual_invested_amount}</div>
                                                 </div>
+                                                <div className="text-[8px] text-zinc-600 italic mt-1">*Assuming past SIPs paid</div>
                                             </>
                                         ) : (
                                             <>
@@ -270,7 +271,7 @@ const PortfolioAnalyzer = ({ fundId, onClose }) => {
                 pendingInstallment={pendingInstallment}
                 fundId={fundId}
                 fundName={result?.fund_name}
-                onUpdate={handleAnalyze} // Re-run analysis after action
+                onUpdate={() => handleAnalyze(true)} // Re-run analysis but skip modal reopening
             />
         </AnimatePresence>
     );

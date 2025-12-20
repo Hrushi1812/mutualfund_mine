@@ -164,44 +164,38 @@ def get_scheme_candidates(query):
 
 class HoldingsService:
     @staticmethod
-    def generate_installment_dates(start_date_str, sip_day):
+    def generate_installment_dates(start_date_str, sip_day, has_manual_amount=True):
         """
         Generates a list of installment dates from start_date up to Today.
-        Returns a list of dicts: { "date": "YYYY-MM-DD", "status": "PAID"|"PENDING" }
+        
+        If has_manual_amount is True (user provided 'Till Upload' amount):
+        - Past installments are marked ASSUMED_PAID (already covered)
+        - Only current month's installment (if date has passed) is PENDING
+        
+        Returns a list of dicts: { "date": "DD-MM-YYYY", "status": "PENDING"|"ASSUMED_PAID" }
         """
         try:
             start_dt = parse_date_from_str(start_date_str).date()
             today = get_current_ist_time().date()
-            
-            # Align start_dt day to sip_day if possible, or move to next month's sip_day
-            # But usually the user says "Start Date" is the first installment.
-            # We will assume Start Date IS the first installment date provided by user.
-            # And subsequent installments are on 'sip_day' of next months.
+            current_month_start = today.replace(day=1)
             
             installments = []
-            
             current_dt = start_dt
             
             # First installment (Start Date) - only if not in the future
             if current_dt <= today:
                 installments.append(current_dt)
             
-            # Subsequent installments
-            # Move to next month's sip_day
+            # Subsequent installments - move to next month's sip_day
             next_month = current_dt + relativedelta(months=1)
-            # handle February etc (relativedelta handles clamping automatically)
-            # But we want to enforce specific SIP DAY if valid
             try:
                 current_dt = next_month.replace(day=sip_day)
             except ValueError:
-                # e.g. sip_day=31 but next month is Feb
-                # fail safe: use last day of month
                 current_dt = next_month + relativedelta(day=31)
 
             while current_dt <= today:
                 installments.append(current_dt)
                 
-                # Next month
                 next_month = current_dt.replace(day=1) + relativedelta(months=1)
                 try:
                     current_dt = next_month.replace(day=sip_day)
@@ -210,9 +204,13 @@ class HoldingsService:
 
             results = []
             for d in installments:
-                status = "PAID"
-                if d == today:
-                     status = "PENDING" # Today is always pending confirmation
+                # Determine status based on whether it's current month or past
+                if has_manual_amount and d < current_month_start:
+                    # Past month installments - covered by "Till Upload" amount
+                    status = "ASSUMED_PAID"
+                else:
+                    # Current month or newer - needs user confirmation
+                    status = "PENDING"
                 
                 results.append({
                     "date": format_date_for_api(d),
@@ -253,7 +251,7 @@ class HoldingsService:
 
     @staticmethod
     def list_funds(user_id):
-        cursor = holdings_collection.find({"user_id": user_id}, {"fund_name": 1, "invested_amount": 1, "invested_date": 1, "scheme_code": 1, "nickname": 1, "created_at": 1})
+        cursor = holdings_collection.find({"user_id": user_id}, {"fund_name": 1, "invested_amount": 1, "invested_date": 1, "scheme_code": 1, "nickname": 1, "created_at": 1, "investment_type": 1})
         funds = []
         for doc in cursor:
             created_at = doc.get("created_at")
@@ -267,7 +265,8 @@ class HoldingsService:
                 "scheme_code": doc.get("scheme_code"),
                 "nickname": doc.get("nickname"),
                 "is_stale": is_stale,
-                "created_at": format_date_for_api(created_at) if created_at else None
+                "created_at": format_date_for_api(created_at) if created_at else None,
+                "investment_type": doc.get("investment_type", "lumpsum")
             })
         return funds
 
@@ -509,8 +508,9 @@ class HoldingsService:
         future_sip_units = 0.0 # Initially zero for a fresh upload
         
         if investment_type == "sip":
-            # Generate Installments
-            dates_info = HoldingsService.generate_installment_dates(invested_date, sip_day)
+            # Generate Installments - if user provided 'Till Upload' amount, past installments are covered
+            has_manual = manual_invested_amount > 0
+            dates_info = HoldingsService.generate_installment_dates(invested_date, sip_day, has_manual_amount=has_manual)
             
             # For SIP: invested_amount = manual (CAS) + future app-tracked
             # On initial upload, future_tracked = 0, so invested_amount = manual_invested_amount
@@ -518,14 +518,9 @@ class HoldingsService:
             
             for item in dates_info:
                 d_str = item["date"]
-                status = item["status"]
+                status = item["status"]  # ASSUMED_PAID for past, PENDING for current month
                 
-                # Past dates marked as ASSUMED_PAID - they don't affect invested_amount
-                # Only PENDING (today) stays as PENDING
-                # Note: ASSUMED_PAID means we assume user paid, but we don't add to tracked amount
-                # because that's already in manual_invested_amount
-                if status == "PAID":
-                    status = "ASSUMED_PAID"  # Change to ASSUMED_PAID for past installments
+                # Status is already set correctly by generate_installment_dates
                 
                 inst = SIPInstallment(
                     date=d_str,

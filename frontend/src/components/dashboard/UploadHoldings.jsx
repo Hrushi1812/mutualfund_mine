@@ -1,168 +1,11 @@
-import React, { useState, useContext, useRef } from 'react';
-import { Upload, Calendar, FileSpreadsheet, CheckCircle2, AlertCircle, IndianRupee, X, Loader2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import api from '../../api';
-import { PortfolioContext } from '../../context/PortfolioContext';
+import React, { useState } from 'react';
+import { Upload, TrendingUp, RefreshCw } from 'lucide-react';
+import { motion } from 'framer-motion';
+import UploadLumpsum from './UploadLumpsum';
+import UploadSIP from './UploadSIP';
 
 const UploadHoldings = () => {
-    const { fetchFunds } = useContext(PortfolioContext);
-    const [mode, setMode] = useState('lumpsum'); // 'lumpsum' | 'sip'
-    const [file, setFile] = useState(null);
-    const [fundName, setFundName] = useState('');
-    const [nickname, setNickname] = useState('');
-    const [investedAmount, setInvestedAmount] = useState('');
-    const fileInputRef = useRef(null);
-
-    const [investedDate, setInvestedDate] = useState('');
-
-    // SIP Specific State
-    const [sipDay, setSipDay] = useState('');
-    const [totalUnits, setTotalUnits] = useState('');
-    const [totalInvestedAmount, setTotalInvestedAmount] = useState('');  // CAS invested amount
-
-    // Ambiguity Handling
-    const [showModal, setShowModal] = useState(false);
-    const [candidates, setCandidates] = useState([]);
-    const [pendingFundId, setPendingFundId] = useState(null);
-    // UI State for selection
-    const [selectedScheme, setSelectedScheme] = useState(null);
-
-    const [dragOver, setDragOver] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState({ type: '', text: '' });
-
-    const handleFileDrop = (e) => {
-        e.preventDefault();
-        setDragOver(false);
-        const droppedFile = e.dataTransfer.files[0];
-        if (droppedFile) setFile(droppedFile);
-    };
-
-    const handleRemoveFile = (e) => {
-        e.stopPropagation(); // Prevent opening file dialog
-        setFile(null);
-    }
-
-    const handleUpload = async (e) => {
-        e.preventDefault();
-        if (!file || !fundName || !investedAmount || !investedDate) {
-            setMessage({ type: 'error', text: 'Please provide all mandatory fields: Fund Name, File, Amount, and Date.' });
-            return;
-        }
-
-        // SIP-specific validation
-        if (mode === 'sip') {
-            if (!sipDay || sipDay < 1 || sipDay > 31) {
-                setMessage({ type: 'error', text: 'Please enter a valid SIP day (1-31).' });
-                return;
-            }
-            if (!totalUnits || parseFloat(totalUnits) < 0) {
-                setMessage({ type: 'error', text: 'Please enter your total units held (from CAS). Enter 0 if starting fresh.' });
-                return;
-            }
-            if (!totalInvestedAmount || parseFloat(totalInvestedAmount) < 0) {
-                setMessage({ type: 'error', text: 'Please enter total invested amount till now (from CAS). Enter 0 if starting fresh.' });
-                return;
-            }
-        }
-
-        setLoading(true);
-        const formData = new FormData();
-        formData.append('fund_name', fundName);
-        formData.append('file', file);
-        formData.append('investment_type', mode);
-
-        if (investedAmount) formData.append('invested_amount', investedAmount);
-        if (investedDate) {
-            // Convert YYYY-MM-DD to DD-MM-YYYY
-            const [year, month, day] = investedDate.split('-');
-            const formattedDate = `${day}-${month}-${year}`;
-            formData.append('invested_date', formattedDate);
-        }
-
-        if (mode === 'sip') {
-            if (investedAmount) formData.append('sip_amount', investedAmount); // Invested Amount acts as SIP Amount
-            if (sipDay) formData.append('sip_day', sipDay);
-            if (totalUnits) formData.append('total_units', totalUnits);
-            if (totalInvestedAmount) formData.append('total_invested_amount', totalInvestedAmount);
-        }
-
-        if (nickname) formData.append('nickname', nickname);
-
-        try {
-            const response = await api.post('/upload-holdings/', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
-            const data = response.data;
-
-            if (data.upload_status && data.upload_status.requires_selection) {
-                // AMBIGUITY DETECTED
-                setPendingFundId(data.upload_status.id);
-                setCandidates(data.upload_status.candidates || []);
-                setShowModal(true);
-                setMessage({ type: '', text: '' }); // Clear success msg for now
-            } else {
-                // SUCCESS NO AMBIGUITY
-                setMessage({ type: 'success', text: 'Portfolio uploaded successfully!' });
-                fetchFunds();
-                // Reset form
-                resetForm();
-            }
-        } catch (error) {
-            console.error(error);
-            let userMsg = 'Upload failed. Please check the file format.';
-
-            if (error.response) {
-                // Server responded with an error code
-                if (error.response.data && error.response.data.detail) {
-                    // FastAPI default error structure
-                    const detail = error.response.data.detail;
-                    userMsg = `Error: ${typeof detail === 'object' ? JSON.stringify(detail) : detail}`;
-                }
-            } else if (error.request) {
-                // Request made but no response (Network Error)
-                userMsg = 'Cannot reach server. Please ensure the backend is running.';
-            } else {
-                userMsg = `Error: ${error.message}`;
-            }
-
-            setMessage({ type: 'error', text: userMsg });
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const resetForm = () => {
-        setFile(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        setFundName('');
-        setNickname('');
-        setInvestedAmount('');
-        setInvestedDate('');
-        setSipDay('');
-        setTotalUnits('');
-        setTotalInvestedAmount('');
-        setPendingFundId(null);
-        setCandidates([]);
-        setSelectedScheme(null);
-        setShowModal(false);
-    }
-
-    const handleSchemeSelection = async (schemeCode) => {
-        setSelectedScheme(schemeCode); // Highlight selection
-        setLoading(true);
-        try {
-            await api.patch(`/funds/${pendingFundId}/scheme`, { scheme_code: schemeCode });
-            setMessage({ type: 'success', text: 'Scheme selected and portfolio updated!' });
-            fetchFunds();
-            resetForm();
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to update scheme selection.' });
-            setSelectedScheme(null); // Reset on error
-        } finally {
-            setLoading(false);
-        }
-    }
+    const [activeTab, setActiveTab] = useState('lumpsum'); // 'lumpsum' | 'sip'
 
     return (
         <motion.div
@@ -173,289 +16,50 @@ const UploadHoldings = () => {
             {/* Glow Effect */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-[80px] -z-10"></div>
 
-            <h2 className="text-2xl font-bold text-white mb-8 flex items-center gap-2">
+            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
                 <div className="p-2 rounded-lg bg-primary/20 text-primary">
                     <Upload className="w-5 h-5" />
                 </div>
                 Upload Portfolio
             </h2>
 
-            <form onSubmit={handleUpload} className="space-y-6">
-
-                {/* 1. Fund Name */}
-                <div>
-                    <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Portfolio / Fund Name <span className="text-red-500">*</span></label>
-                    <input
-                        type="text"
-                        value={fundName}
-                        onChange={(e) => setFundName(e.target.value)}
-                        placeholder="e.g. Nippon India Multi Cap Fund"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors"
-                    />
-                    <p className="text-[10px] text-amber-400/80 mt-1 flex items-center gap-1">
-                        <span className="inline-block w-1.5 h-1.5 bg-amber-400/80 rounded-full"></span>
-                        IDCW (Dividend) funds support coming soon
-                    </p>
-                </div>
-
-                {/* Nickname (Optional) */}
-                <div>
-                    <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Nickname (Optional)</label>
-                    <input
-                        type="text"
-                        value={nickname}
-                        onChange={(e) => setNickname(e.target.value)}
-                        placeholder="e.g. Retirement Fund"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors"
-                    />
-                </div>
-
-                {/* 2. Excel Upload Area */}
-                <div>
-                    <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Holdings File (Excel) <span className="text-red-500">*</span></label>
-                    <div
-                        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                        onDragLeave={() => setDragOver(false)}
-                        onDrop={handleFileDrop}
-                        className={`
-                            border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer relative group
-                            ${dragOver ? 'border-primary bg-primary/10' : 'border-white/10 hover:border-zinc-500 hover:bg-white/5'}
-                        `}
+            {/* Tab Navigation */}
+            <div className="mb-8">
+                <div className="flex bg-white/5 p-1.5 rounded-2xl w-full border border-white/10">
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('lumpsum')}
+                        className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${activeTab === 'lumpsum'
+                                ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                            }`}
                     >
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            accept=".xlsx, .xls"
-                            onChange={(e) => setFile(e.target.files[0])}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        />
-
-                        <div className="flex flex-col items-center gap-3">
-                            <div className="p-3 bg-white/5 rounded-full group-hover:bg-primary/20 transition-colors">
-                                <FileSpreadsheet className={`w-8 h-8 ${file ? 'text-green-500' : 'text-zinc-500 group-hover:text-white'}`} />
-                            </div>
-                            {file ? (
-                                <div className="relative">
-                                    <p className="text-sm font-medium text-white">{file.name}</p>
-                                    <p className="text-xs text-green-400 mb-1">Ready to upload</p>
-                                    <button
-                                        type="button"
-                                        onClick={handleRemoveFile}
-                                        className="relative z-10 px-3 py-1 bg-white/10 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 text-xs rounded-full border border-white/10 transition-colors flex items-center gap-1 mx-auto"
-                                    >
-                                        <X className="w-3 h-3" /> Remove
-                                    </button>
-                                </div>
-                            ) : (
-                                <div>
-                                    <p className="text-sm font-medium text-white">Drop Excel file or click to browse</p>
-                                    <p className="text-xs text-zinc-500 mt-1">Supports .xlsx, .xls</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* 3. Mode Selection (Radio) */}
-                <div>
-                    <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">Investment Mode</label>
-                    <div className="flex items-center gap-3">
-                        <div className="flex bg-white/5 p-1 rounded-xl w-max border border-white/10">
-                            <button
-                                type="button"
-                                onClick={() => setMode('lumpsum')}
-                                className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'lumpsum' ? 'bg-primary text-white shadow-lg' : 'text-zinc-400 hover:text-white'}`}
-                            >
-                                Lumpsum
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setMode('sip')}
-                                className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'sip' ? 'bg-primary text-white shadow-lg' : 'text-zinc-400 hover:text-white'}`}
-                            >
-                                SIP
-                            </button>
-                        </div>
-                        {/* Step-up SIP Coming Soon Badge */}
-                        <span className="px-2.5 py-1 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-full text-[10px] font-medium text-purple-300 flex items-center gap-1">
-                            <span className="relative flex h-1.5 w-1.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-purple-400"></span>
-                            </span>
-                            Step-up SIP Coming Soon
-                        </span>
-                    </div>
-                </div>
-
-                {/* 4. Details Row */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="relative">
-                        <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-                            {mode === 'sip' ? 'SIP Amount' : 'Invested Amount'} <span className="text-red-500">*</span>
-                        </label>
-                        <div className="relative">
-                            <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                            <input
-                                type="number"
-                                value={investedAmount}
-                                onChange={(e) => setInvestedAmount(e.target.value)}
-                                placeholder="0.00"
-                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors"
-                            />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-                            {mode === 'sip' ? 'Start Date' : 'Invested Date'} <span className="text-red-500">*</span>
-                        </label>
-                        <div className="relative">
-                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                            <input
-                                type="date"
-                                value={investedDate}
-                                onChange={(e) => setInvestedDate(e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors [color-scheme:dark]"
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {mode === 'sip' && (
-                    <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        className="space-y-4"
+                        <TrendingUp className="w-4 h-4" />
+                        Lumpsum Investment
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('sip')}
+                        className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${activeTab === 'sip'
+                                ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-purple-500/25'
+                                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                            }`}
                     >
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">SIP Date (Day of Month) <span className="text-red-500">*</span></label>
-                                <input
-                                    type="number"
-                                    min="1"
-                                    max="31"
-                                    value={sipDay}
-                                    onChange={(e) => setSipDay(e.target.value)}
-                                    placeholder="e.g. 5"
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Total Units Held Till Date <span className="text-red-500">*</span></label>
-                                <input
-                                    type="number"
-                                    value={totalUnits}
-                                    onChange={(e) => setTotalUnits(e.target.value)}
-                                    placeholder="Total accumulated units"
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors"
-                                />
-                                <p className="text-[10px] text-zinc-500 mt-1">Available in your CAS/Statement. This is the starting balance.</p>
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Total Invested Amount Till Upload <span className="text-red-500">*</span></label>
-                            <div className="relative">
-                                <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                                <input
-                                    type="number"
-                                    value={totalInvestedAmount}
-                                    onChange={(e) => setTotalInvestedAmount(e.target.value)}
-                                    placeholder="e.g. 500000"
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors"
-                                />
-                            </div>
-                            <p className="text-[10px] text-zinc-500 mt-1">Total amount invested till now (from CAS). The app will track new investments separately.</p>
-                        </div>
-                    </motion.div>
-                )}
+                        <RefreshCw className="w-4 h-4" />
+                        SIP (Systematic)
+                    </button>
+                </div>
+            </div>
 
-                {/* Submit Action */}
-                <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-primary hover:bg-blue-600 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-primary/25 flex items-center justify-center gap-2 group"
-                >
-                    {loading ? (
-                        <span className="animate-pulse">Processing Portfolio...</span>
-                    ) : (
-                        <>Upload Portfolio <Upload className="w-4 h-4 group-hover:-translate-y-1 transition-transform" /></>
-                    )}
-                </button>
-
-                {/* Messages */}
-                <AnimatePresence>
-                    {message.text && (
-                        <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className={`p-4 rounded-xl flex items-center gap-2 text-sm ${message.type === 'error' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-green-500/10 text-green-500 border border-green-500/20'}`}
-                        >
-                            {message.type === 'error' ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-                            {message.text}
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </form>
-
-            {/* AMBIGUITY MODAL */}
-            <AnimatePresence>
-                {showModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl"
-                        >
-                            <h3 className="text-xl font-bold text-white mb-2">Select Fund Scheme</h3>
-                            <p className="text-sm text-zinc-400 mb-4">We found multiple matching schemes. Please select the correct one:</p>
-
-                            <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                                {candidates.map((c) => {
-                                    const isSelected = selectedScheme === c.schemeCode;
-                                    const isBusy = loading && isSelected;
-
-                                    return (
-                                        <button
-                                            key={c.schemeCode}
-                                            onClick={() => handleSchemeSelection(c.schemeCode)}
-                                            disabled={loading}
-                                            className={`
-                                                w-full text-left p-3 rounded-lg border transition-all text-sm group
-                                                ${isSelected
-                                                    ? 'bg-primary/20 border-primary text-white shadow-[0_0_15px_rgba(var(--primary),0.3)]'
-                                                    : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-primary/50 text-zinc-300 hover:text-white'
-                                                }
-                                                ${loading && !isSelected ? 'opacity-40 cursor-not-allowed' : ''}
-                                            `}
-                                        >
-                                            <div className="flex justify-between items-center">
-                                                <div className="flex items-center gap-2">
-                                                    {isBusy && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
-                                                    <span className={`font-medium ${isSelected ? 'text-primary-foreground' : ''}`}>
-                                                        {c.schemeName}
-                                                        {isBusy && <span className="ml-2 text-xs text-primary font-normal">Uploading...</span>}
-                                                    </span>
-                                                </div>
-                                                <span className={`text-xs px-2 py-1 rounded ml-2 ${isSelected ? 'bg-primary/30 text-white' : 'bg-black/20 text-zinc-500'}`}>
-                                                    {c.schemeCode}
-                                                </span>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-
-                            <button
-                                onClick={resetForm}
-                                className="mt-4 w-full py-2 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white rounded-lg transition-colors text-sm"
-                            >
-                                Cancel Upload
-                            </button>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+            {/* Render Active Form */}
+            <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, x: activeTab === 'lumpsum' ? -20 : 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.2 }}
+            >
+                {activeTab === 'lumpsum' ? <UploadLumpsum /> : <UploadSIP />}
+            </motion.div>
         </motion.div>
     );
 };

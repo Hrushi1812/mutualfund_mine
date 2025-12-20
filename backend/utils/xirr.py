@@ -232,8 +232,10 @@ def calculate_sip_xirr(
     cash_flows = []
     
     # Add installments as negative cash flows (investments)
+    # Include both PAID (confirmed) and ASSUMED_PAID (covered by Till Upload amount)
     for inst in installments:
-        if inst.get("status") == "PAID":
+        status = inst.get("status", "")
+        if status in ("PAID", "ASSUMED_PAID"):
             try:
                 inst_date = parse_date(inst["date"])
                 amount = float(inst.get("amount", 0))
