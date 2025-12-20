@@ -24,9 +24,15 @@ async def upload(
     fund_name: str = Form(..., min_length=1),
     scheme_code: str = Form(None),
     file: UploadFile = File(...),
-    invested_amount: str = Form(...),
-    invested_date: str = Form(...), # DD-MM-YYYY
+    invested_amount: str = Form(None), # Optional for SIP (derived) or Lumpsum
+    invested_date: str = Form(...), # DD-MM-YYYY (Start Date for SIP)
     nickname: str = Form(None),
+    # SIP Fields
+    investment_type: str = Form("lumpsum"), # lumpsum, sip
+    sip_amount: str = Form(None),
+    sip_day: str = Form(None),
+    total_units: str = Form(None),
+    total_invested_amount: str = Form(None),  # CAS Invested Amount
     current_user: dict = Depends(get_current_user)
 ):
     user_id = str(current_user["_id"])
@@ -36,17 +42,54 @@ async def upload(
         raise HTTPException(400, "Invalid file format. Please upload an Excel file (.xls, .xlsx).")
 
     # 2. Validate Amount
-    if not invested_amount or not invested_amount.strip():
-        raise HTTPException(422, "Invested amount is required.")
+    amount_float = 0.0
+    if investment_type == "lumpsum":
+        if not invested_amount or not invested_amount.strip():
+            raise HTTPException(422, "Invested amount is required for Lumpsum.")
+        try:
+            amount_float = float(invested_amount)
+            if amount_float <= 0: raise ValueError
+        except:
+             raise HTTPException(422, "Invested amount must be a positive number.")
+             
+    # 3. Validate SIP Fields
+    sip_amount_float = 0.0
+    sip_day_int = None
+    manual_total_units_float = 0.0
     
-    try:
-        amount_float = float(invested_amount)
-        if amount_float <= 0:
-            raise ValueError
-    except:
-        raise HTTPException(422, "Invested amount must be a positive number.")
+    if investment_type == "sip":
+        if not sip_amount or not sip_amount.strip():
+             raise HTTPException(422, "SIP Amount is required.")
+        try:
+            sip_amount_float = float(sip_amount)
+            if sip_amount_float <= 0: raise ValueError
+        except:
+             raise HTTPException(422, "SIP Amount must be positive.")
+             
+        if not sip_day or not sip_day.strip():
+             raise HTTPException(422, "SIP Day is required.")
+        try:
+            sip_day_int = int(sip_day)
+            if not (1 <= sip_day_int <= 31): raise ValueError
+        except:
+             raise HTTPException(422, "SIP Day must be between 1 and 31.")
+        
+        # Total Units (Optional but recommended)
+        if total_units and total_units.strip():
+             try:
+                 manual_total_units_float = float(total_units)
+             except:
+                 pass # Ignore invalid units, default 0
 
-    # 3. Validate Date
+        # Total Invested Amount from CAS (Mandatory for correct P&L)
+        manual_invested_amount_float = 0.0
+        if total_invested_amount and total_invested_amount.strip():
+            try:
+                manual_invested_amount_float = float(total_invested_amount)
+            except:
+                pass  # Ignore invalid, default 0
+
+    # 4. Validate Date
     if not invested_date or not invested_date.strip():
         raise HTTPException(422, "Invested date is required.")
         
@@ -56,8 +99,10 @@ async def upload(
             raise HTTPException(422, "Invalid date format. Use DD-MM-YYYY.")
     
     # Process
+    manual_invested_for_service = manual_invested_amount_float if investment_type == "sip" else 0.0
     save_result = holdings_service.process_and_save_holdings(
-        fund_name, file, user_id, scheme_code, amount_float, invested_date, nickname
+        fund_name, file, user_id, scheme_code, amount_float, invested_date, nickname,
+        investment_type, sip_amount_float, sip_day_int, manual_total_units_float, manual_invested_for_service
     )
     
     if "error" in save_result:
@@ -101,3 +146,19 @@ def update_scheme(
         "message": "Scheme updated successfully",
         "analysis": analysis
     }
+
+from models.db_schemas import SIPAction
+
+@router.post("/funds/{fund_id}/sip-action")
+def sip_action(
+    fund_id: str,
+    payload: SIPAction,
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = str(current_user["_id"])
+    result = holdings_service.handle_sip_action(fund_id, user_id, payload.date, payload.action)
+    
+    if "error" in result:
+        raise HTTPException(400, result["error"])
+        
+    return result

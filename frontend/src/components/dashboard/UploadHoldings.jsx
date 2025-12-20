@@ -15,6 +15,11 @@ const UploadHoldings = () => {
 
     const [investedDate, setInvestedDate] = useState('');
 
+    // SIP Specific State
+    const [sipDay, setSipDay] = useState('');
+    const [totalUnits, setTotalUnits] = useState('');
+    const [totalInvestedAmount, setTotalInvestedAmount] = useState('');  // CAS invested amount
+
     // Ambiguity Handling
     const [showModal, setShowModal] = useState(false);
     const [candidates, setCandidates] = useState([]);
@@ -45,6 +50,22 @@ const UploadHoldings = () => {
             return;
         }
 
+        // SIP-specific validation
+        if (mode === 'sip') {
+            if (!sipDay || sipDay < 1 || sipDay > 31) {
+                setMessage({ type: 'error', text: 'Please enter a valid SIP day (1-31).' });
+                return;
+            }
+            if (!totalUnits || parseFloat(totalUnits) < 0) {
+                setMessage({ type: 'error', text: 'Please enter your total units held (from CAS). Enter 0 if starting fresh.' });
+                return;
+            }
+            if (!totalInvestedAmount || parseFloat(totalInvestedAmount) < 0) {
+                setMessage({ type: 'error', text: 'Please enter total invested amount till now (from CAS). Enter 0 if starting fresh.' });
+                return;
+            }
+        }
+
         setLoading(true);
         const formData = new FormData();
         formData.append('fund_name', fundName);
@@ -58,6 +79,14 @@ const UploadHoldings = () => {
             const formattedDate = `${day}-${month}-${year}`;
             formData.append('invested_date', formattedDate);
         }
+
+        if (mode === 'sip') {
+            if (investedAmount) formData.append('sip_amount', investedAmount); // Invested Amount acts as SIP Amount
+            if (sipDay) formData.append('sip_day', sipDay);
+            if (totalUnits) formData.append('total_units', totalUnits);
+            if (totalInvestedAmount) formData.append('total_invested_amount', totalInvestedAmount);
+        }
+
         if (nickname) formData.append('nickname', nickname);
 
         try {
@@ -110,6 +139,9 @@ const UploadHoldings = () => {
         setNickname('');
         setInvestedAmount('');
         setInvestedDate('');
+        setSipDay('');
+        setTotalUnits('');
+        setTotalInvestedAmount('');
         setPendingFundId(null);
         setCandidates([]);
         setSelectedScheme(null);
@@ -160,6 +192,10 @@ const UploadHoldings = () => {
                         placeholder="e.g. Nippon India Multi Cap Fund"
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors"
                     />
+                    <p className="text-[10px] text-amber-400/80 mt-1 flex items-center gap-1">
+                        <span className="inline-block w-1.5 h-1.5 bg-amber-400/80 rounded-full"></span>
+                        IDCW (Dividend) funds support coming soon
+                    </p>
                 </div>
 
                 {/* Nickname (Optional) */}
@@ -223,32 +259,40 @@ const UploadHoldings = () => {
                 {/* 3. Mode Selection (Radio) */}
                 <div>
                     <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">Investment Mode</label>
-                    <div className="flex bg-white/5 p-1 rounded-xl w-max border border-white/10">
-                        <button
-                            type="button"
-                            onClick={() => setMode('lumpsum')}
-                            className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'lumpsum' ? 'bg-primary text-white shadow-lg' : 'text-zinc-400 hover:text-white'}`}
-                        >
-                            Lumpsum
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                // setMode('sip'); 
-                                setMessage({ type: 'info', text: 'SIP Mode Coming Soon!' });
-                                setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-                            }}
-                            className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'sip' ? 'bg-primary text-white shadow-lg' : 'text-zinc-400 hover:text-white cursor-not-allowed opacity-70'}`}
-                        >
-                            SIP
-                        </button>
+                    <div className="flex items-center gap-3">
+                        <div className="flex bg-white/5 p-1 rounded-xl w-max border border-white/10">
+                            <button
+                                type="button"
+                                onClick={() => setMode('lumpsum')}
+                                className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'lumpsum' ? 'bg-primary text-white shadow-lg' : 'text-zinc-400 hover:text-white'}`}
+                            >
+                                Lumpsum
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setMode('sip')}
+                                className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'sip' ? 'bg-primary text-white shadow-lg' : 'text-zinc-400 hover:text-white'}`}
+                            >
+                                SIP
+                            </button>
+                        </div>
+                        {/* Step-up SIP Coming Soon Badge */}
+                        <span className="px-2.5 py-1 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-full text-[10px] font-medium text-purple-300 flex items-center gap-1">
+                            <span className="relative flex h-1.5 w-1.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-purple-400"></span>
+                            </span>
+                            Step-up SIP Coming Soon
+                        </span>
                     </div>
                 </div>
 
                 {/* 4. Details Row */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="relative">
-                        <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Invested Amount <span className="text-red-500">*</span></label>
+                        <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                            {mode === 'sip' ? 'SIP Amount' : 'Invested Amount'} <span className="text-red-500">*</span>
+                        </label>
                         <div className="relative">
                             <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                             <input
@@ -261,7 +305,9 @@ const UploadHoldings = () => {
                         </div>
                     </div>
                     <div>
-                        <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Invested Date <span className="text-red-500">*</span></label>
+                        <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                            {mode === 'sip' ? 'Start Date' : 'Invested Date'} <span className="text-red-500">*</span>
+                        </label>
                         <div className="relative">
                             <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                             <input
@@ -273,6 +319,54 @@ const UploadHoldings = () => {
                         </div>
                     </div>
                 </div>
+
+                {mode === 'sip' && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="space-y-4"
+                    >
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">SIP Date (Day of Month) <span className="text-red-500">*</span></label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="31"
+                                    value={sipDay}
+                                    onChange={(e) => setSipDay(e.target.value)}
+                                    placeholder="e.g. 5"
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Total Units Held Till Date <span className="text-red-500">*</span></label>
+                                <input
+                                    type="number"
+                                    value={totalUnits}
+                                    onChange={(e) => setTotalUnits(e.target.value)}
+                                    placeholder="Total accumulated units"
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors"
+                                />
+                                <p className="text-[10px] text-zinc-500 mt-1">Available in your CAS/Statement. This is the starting balance.</p>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Total Invested Amount Till Upload <span className="text-red-500">*</span></label>
+                            <div className="relative">
+                                <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                                <input
+                                    type="number"
+                                    value={totalInvestedAmount}
+                                    onChange={(e) => setTotalInvestedAmount(e.target.value)}
+                                    placeholder="e.g. 500000"
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors"
+                                />
+                            </div>
+                            <p className="text-[10px] text-zinc-500 mt-1">Total amount invested till now (from CAS). The app will track new investments separately.</p>
+                        </div>
+                    </motion.div>
+                )}
 
                 {/* Submit Action */}
                 <button

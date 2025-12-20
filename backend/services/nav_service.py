@@ -13,6 +13,7 @@ from utils.date_utils import (
     MARKET_OPEN_TIME,
 )
 from utils.common import NSE_API_URL, NSE_BASE_URL
+from utils.xirr import calculate_sip_xirr
 from core.logging import get_logger
 
 logger = get_logger("NavService")
@@ -176,6 +177,54 @@ class NavService:
                     continue
         except Exception as e:
             logger.error(f"Error fetching historical NAV for {scheme_code} date {target_date_str}: {e}")
+        return None
+
+    @staticmethod
+    def get_next_nav_after_date(scheme_code, target_date_str):
+        """
+        Finds the first official NAV on or after the target date.
+        This is used for SIP unit calculation - units are allocated based on 
+        the NAV of the investment date (or next business day if market was closed).
+        
+        Returns (nav_float, nav_date_str) or None.
+        """
+        try:
+            url = f"https://api.mfapi.in/mf/{scheme_code}"
+            response = requests.get(url, timeout=5)
+            if response.status_code != 200:
+                return None
+
+            data = response.json()
+            if data.get("status") != "SUCCESS":
+                return None
+
+            target_date = parse_date_from_str(target_date_str).date()
+            nav_data = data.get("data") or []
+
+            # nav_data is newest-first, so we need to find the earliest entry >= target_date
+            # We'll collect all entries >= target_date, then take the oldest one (smallest date)
+            candidates = []
+            for entry in nav_data:
+                try:
+                    entry_date = datetime.strptime(entry["date"], "%d-%m-%Y").date()
+                    if entry_date >= target_date:
+                        candidates.append((entry_date, float(entry["nav"]), entry["date"]))
+                except Exception:
+                    continue
+            
+            if candidates:
+                # Sort by date ascending and take the first (oldest/earliest)
+                candidates.sort(key=lambda x: x[0])
+                _, nav, nav_date_str = candidates[0]
+                return (nav, nav_date_str)
+            
+            # If no NAV on or after target_date, fall back to latest available
+            if nav_data:
+                latest = nav_data[0]
+                return (float(latest["nav"]), latest["date"])
+                
+        except Exception as e:
+            logger.error(f"Error fetching next NAV for {scheme_code} date {target_date_str}: {e}")
         return None
 
     @staticmethod
@@ -652,26 +701,49 @@ class NavService:
                                 return {"error": "No NAV data available."}
 
         # --- 2. Historical NAV (Purchase Price) ---
+        investment_type = doc.get("investment_type", "lumpsum")
+        
         if not investment:
             investment = float(doc.get("invested_amount", 0) or 0)
         if not input_date:
             input_date = doc.get("invested_date")
 
         purchase_nav = current_nav
-        if input_date:
-            try:
-                hist_res = NavService.get_nav_at_date(scheme_code, input_date)
-                if hist_res:
-                    purchase_nav = hist_res[0]
-            except Exception as e:
-                logger.debug(f"Failed to fetch purchase NAV for {input_date}: {e}")
+        units = 0.0
+        has_estimated_units = False  # Will be set True only for SIP with estimated units
+        
+        if investment_type == "lumpsum":
+            # Existing Lumpsum Logic
+            if input_date:
+                try:
+                    hist_res = NavService.get_nav_at_date(scheme_code, input_date)
+                    if hist_res:
+                        purchase_nav = hist_res[0]
+                except Exception as e:
+                    logger.debug(f"Failed to fetch purchase NAV for {input_date}: {e}")
+            
+            if purchase_nav and purchase_nav > 0:
+                units = investment / purchase_nav
+            else:
+                 units = 0 # Safety
+                 
+        else:
+            # SIP Logic
+            # Total Units = Manual Start Units + Future Accumulated Units
+            manual_units = float(doc.get("manual_total_units", 0) or 0)
+            future_units = float(doc.get("future_sip_units", 0) or 0)
+            units = manual_units + future_units
+            
+            # Check if any units are estimated
+            has_estimated_units = future_units > 0  # future_sip_units are always estimated
+            
+            # Average NAV = Total Invested / Total Units
+            if units > 0:
+                purchase_nav = investment / units
+            else:
+                purchase_nav = 0.0
 
         # --- 3. Compute Metrics ---
-        if not purchase_nav or purchase_nav == 0:
-            logger.error("Invalid purchase_nav, cannot compute units")
-            return {"error": "Invalid purchase NAV."}
-
-        units = investment / purchase_nav if purchase_nav else 0
         current_value = units * current_nav if current_nav is not None else 0
         total_pnl = current_value - investment
         total_pnl_pct = (total_pnl / investment) * 100 if investment > 0 else 0
@@ -687,23 +759,65 @@ class NavService:
         # Enhance note with percent change if estimated
         if is_live_estimated and active_change_pct is not None:
             note += f" ({active_change_pct:+.2f}%)"
+            
+        # Detect Pending SIP Installments for Frontend Alert
+        sip_pending_installments = []
+        xirr_value = None  # XIRR (Annualized Return)
+        has_pending_nav_sip = False  # SIP paid but units not yet allocated
+        pending_nav_amount = 0.0  # Amount invested but not yet allocated units
+        
+        if investment_type == "sip":
+            installments = doc.get("sip_installments", [])
+            for inst in installments:
+                if inst.get("status") == "PENDING":
+                    sip_pending_installments.append(inst)
+                elif inst.get("status") == "PAID":
+                    # Check if this PAID installment has pending NAV (units is None)
+                    if inst.get("units") is None or inst.get("allocation_status") == "PENDING_NAV":
+                        has_pending_nav_sip = True
+                        pending_nav_amount += float(inst.get("amount", 0))
+                    # Check if units are estimated
+                    if inst.get("allocation_status") == "ESTIMATED" or inst.get("is_estimated"):
+                        has_estimated_units = True
+            
+            # Calculate XIRR for SIP
+            # Only calculate if we have current value and confirmed installments with units
+            if current_value > 0 and installments and units > 0:
+                try:
+                    xirr_value = calculate_sip_xirr(
+                        installments=installments,
+                        current_value=current_value,
+                        current_date=d0_date
+                    )
+                    if xirr_value is not None:
+                        xirr_value = round(xirr_value, 2)
+                except Exception as e:
+                    logger.debug(f"XIRR calculation failed for {fund_id}: {e}")
+                    xirr_value = None
 
         return {
             "fund_id": fund_id,
             "fund_name": fund_name,
             "invested_amount": investment,
+            "manual_invested_amount": float(doc.get("manual_invested_amount", 0) or 0) if investment_type == "sip" else 0.0,
             "invested_date": input_date,
             "units": round(units, 4),
-            "purchase_nav": purchase_nav,
+            "purchase_nav": round(purchase_nav, 4) if purchase_nav else 0.0,
             "current_nav": round(current_nav, 4) if current_nav is not None else None,
             "current_value": round(current_value, 2),
             "pnl": round(total_pnl, 2),
             "pnl_pct": round(total_pnl_pct, 2),
+            "xirr": xirr_value,  # Annualized return (XIRR) for SIP
             "day_pnl": round(day_pnl_amt, 2),
             "day_pnl_pct": round(day_pnl_pct, 2),
             "last_updated": last_updated_str,
             "note": note,
             "nickname": doc.get("nickname"),
+            "investment_type": investment_type,
+            "sip_pending_installments": sip_pending_installments,
+            "has_estimated_units": has_estimated_units if investment_type == "sip" else False,
+            "has_pending_nav_sip": has_pending_nav_sip,
+            "pending_nav_amount": round(pending_nav_amount, 2)
         }
 
 

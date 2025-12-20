@@ -1,19 +1,24 @@
 import React, { useState, useContext } from 'react';
-import { X, Calculator, Calendar, IndianRupee, TrendingUp, TrendingDown, Loader2, Clock, Zap } from 'lucide-react';
+import { X, Calculator, Calendar, IndianRupee, TrendingUp, TrendingDown, Loader2, Clock, Zap, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../api';
 import { FyersContext } from '../../context/FyersContext';
+import SIPActionModal from './SIPActionModal';
 
 const PortfolioAnalyzer = ({ fundId, onClose }) => {
     // Fyers connection status for showing delayed data notice
     const fyersContext = useContext(FyersContext);
     const isUsingDelayedData = fyersContext && !fyersContext.isConnected;
     const [connectingFyers, setConnectingFyers] = useState(false);
-    
+
     // State for Analysis Results
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(true); // Start loading immediately
     const [error, setError] = useState(null);
+
+    // SIP Modal State
+    const [showSipModal, setShowSipModal] = useState(false);
+    const [pendingInstallment, setPendingInstallment] = useState(null);
 
     const hasFetched = React.useRef(false);
 
@@ -55,6 +60,13 @@ const PortfolioAnalyzer = ({ fundId, onClose }) => {
                 setError(response.data.error);
             } else if (response.data && response.data.pnl !== undefined) {
                 setResult(response.data);
+
+                // Check for SIP Pending
+                if (response.data.sip_pending_installments && response.data.sip_pending_installments.length > 0) {
+                    // Show the first pending installment
+                    setPendingInstallment(response.data.sip_pending_installments[0]);
+                    setShowSipModal(true);
+                }
             } else {
                 setError("No valid analysis data returned.");
             }
@@ -132,10 +144,23 @@ const PortfolioAnalyzer = ({ fundId, onClose }) => {
                             <div className="space-y-6">
                                 {/* Key Metrics Grid - Creative Redesign */}
                                 <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
-                                    {/* Invested */}
+                                    {/* Invested - Split view for SIP */}
                                     <div className="flex flex-col">
-                                        <span className="text-[10px] sm:text-xs text-zinc-500 mb-1 font-medium tracking-wide">Invested</span>
-                                        <span className="text-base sm:text-lg font-bold text-white tracking-tight">₹{result.invested_amount}</span>
+                                        {result.investment_type === 'sip' && result.manual_invested_amount > 0 ? (
+                                            <>
+                                                <span className="text-[10px] sm:text-xs text-zinc-500 mb-1 font-medium tracking-wide">Total Invested</span>
+                                                <span className="text-base sm:text-lg font-bold text-white tracking-tight">₹{result.invested_amount}</span>
+                                                <div className="text-[9px] text-zinc-500 mt-1 space-y-0.5">
+                                                    <div>Till Upload: ₹{result.manual_invested_amount}</div>
+                                                    <div>Via App: ₹{result.invested_amount - result.manual_invested_amount}</div>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="text-[10px] sm:text-xs text-zinc-500 mb-1 font-medium tracking-wide">Invested</span>
+                                                <span className="text-base sm:text-lg font-bold text-white tracking-tight">₹{result.invested_amount}</span>
+                                            </>
+                                        )}
                                     </div>
 
                                     {/* 1D Returns */}
@@ -176,8 +201,20 @@ const PortfolioAnalyzer = ({ fundId, onClose }) => {
                                         <span className="text-sm text-zinc-400">{isUsingDelayedData ? 'NAV (Est)' : 'Live NAV (Est)'}</span>
                                         <span className="font-mono text-white">₹{result.current_nav}</span>
                                     </div>
+                                    {/* XIRR - Annualized Return for SIP */}
+                                    {result.investment_type === 'sip' && result.xirr !== null && result.xirr !== undefined && (
+                                        <>
+                                            <div className="h-px bg-white/5 w-full my-2"></div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-zinc-400">Annualized Return (XIRR)</span>
+                                                <span className={`font-mono font-semibold ${result.xirr >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                    {result.xirr >= 0 ? '+' : ''}{result.xirr}%
+                                                </span>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
-                                
+
                                 {/* Delayed Data Notice - Clickable to connect Fyers */}
                                 {isUsingDelayedData && (
                                     <button
@@ -192,6 +229,30 @@ const PortfolioAnalyzer = ({ fundId, onClose }) => {
                                     </button>
                                 )}
 
+                                {/* Pending NAV Warning - Units not yet allocated */}
+                                {result.investment_type === 'sip' && result.has_pending_nav_sip && (
+                                    <div className="flex flex-col gap-1 text-xs text-blue-400/80 bg-blue-500/10 p-2 rounded-lg border border-blue-500/20">
+                                        <div className="flex items-start gap-2">
+                                            <Clock className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                                            <div>
+                                                <span className="font-medium">Current SIP: ₹{result.pending_nav_amount} paid</span>
+                                                <span className="block text-blue-300/70">Units pending allocation — awaiting next official NAV</span>
+                                            </div>
+                                        </div>
+                                        <span className="text-[10px] text-blue-300/50 ml-5">
+                                            P&L excludes this SIP until units are allocated
+                                        </span>
+                                    </div>
+                                )}
+
+                                {/* Estimated Units Warning for SIP */}
+                                {result.investment_type === 'sip' && result.has_estimated_units && !result.has_pending_nav_sip && (
+                                    <div className="flex items-start gap-2 text-xs text-amber-400/80 bg-amber-500/10 p-2 rounded-lg">
+                                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                                        <span>Units include estimates (T+1 settlement). Sync with CAS for accurate values.</span>
+                                    </div>
+                                )}
+
                                 {/* Note */}
                                 <div className="text-[10px] text-center text-zinc-600 px-4">
                                     {result.note}
@@ -203,6 +264,14 @@ const PortfolioAnalyzer = ({ fundId, onClose }) => {
                     </div>
                 </motion.div>
             </motion.div>
+            <SIPActionModal
+                isOpen={showSipModal}
+                onClose={() => setShowSipModal(false)}
+                pendingInstallment={pendingInstallment}
+                fundId={fundId}
+                fundName={result?.fund_name}
+                onUpdate={handleAnalyze} // Re-run analysis after action
+            />
         </AnimatePresence>
     );
 };

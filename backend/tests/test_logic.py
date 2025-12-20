@@ -25,7 +25,12 @@ def test_daily_change(isin):
 
     # 2. Get Data
     print(f"Fetching data for {ticker}...")
-    data = yf.download(ticker, period="5d", progress=False)
+    data = yf.download(
+        ticker,
+        period="5d",
+        progress=False,
+        auto_adjust=True
+    )
     
     if len(data) < 2:
         print("Not enough data.")
@@ -36,9 +41,9 @@ def test_daily_change(isin):
     
     # Get last 2 closes (Handling series)
     if not closes.empty:
-         # If it's a DataFrame (new yfinance might verify)
-        val_yesterday = float(closes.iloc[-2])
-        val_today = float(closes.iloc[-1])
+        # If it's a DataFrame (new yfinance might verify)
+        val_yesterday = closes.iloc[-2].item()
+        val_today = closes.iloc[-1].item()
         
         change = ((val_today - val_yesterday) / val_yesterday) * 100
         

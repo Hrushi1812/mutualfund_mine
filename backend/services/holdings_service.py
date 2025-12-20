@@ -12,7 +12,9 @@ import difflib
 
 from datetime import datetime
 from utils.common import NSE_HEADERS, NSE_CSV_URL, FYERS_BSE_CM_URL
-from utils.date_utils import format_date_for_api
+from utils.date_utils import format_date_for_api, parse_date_from_str, get_current_ist_time
+from datetime import date, timedelta
+from dateutil.relativedelta import relativedelta
 from core.logging import get_logger
 
 logger = get_logger("HoldingsService")
@@ -162,6 +164,68 @@ def get_scheme_candidates(query):
 
 class HoldingsService:
     @staticmethod
+    def generate_installment_dates(start_date_str, sip_day):
+        """
+        Generates a list of installment dates from start_date up to Today.
+        Returns a list of dicts: { "date": "YYYY-MM-DD", "status": "PAID"|"PENDING" }
+        """
+        try:
+            start_dt = parse_date_from_str(start_date_str).date()
+            today = get_current_ist_time().date()
+            
+            # Align start_dt day to sip_day if possible, or move to next month's sip_day
+            # But usually the user says "Start Date" is the first installment.
+            # We will assume Start Date IS the first installment date provided by user.
+            # And subsequent installments are on 'sip_day' of next months.
+            
+            installments = []
+            
+            current_dt = start_dt
+            
+            # First installment (Start Date) - only if not in the future
+            if current_dt <= today:
+                installments.append(current_dt)
+            
+            # Subsequent installments
+            # Move to next month's sip_day
+            next_month = current_dt + relativedelta(months=1)
+            # handle February etc (relativedelta handles clamping automatically)
+            # But we want to enforce specific SIP DAY if valid
+            try:
+                current_dt = next_month.replace(day=sip_day)
+            except ValueError:
+                # e.g. sip_day=31 but next month is Feb
+                # fail safe: use last day of month
+                current_dt = next_month + relativedelta(day=31)
+
+            while current_dt <= today:
+                installments.append(current_dt)
+                
+                # Next month
+                next_month = current_dt.replace(day=1) + relativedelta(months=1)
+                try:
+                    current_dt = next_month.replace(day=sip_day)
+                except ValueError:
+                    current_dt = next_month + relativedelta(day=31)
+
+            results = []
+            for d in installments:
+                status = "PAID"
+                if d == today:
+                     status = "PENDING" # Today is always pending confirmation
+                
+                results.append({
+                    "date": format_date_for_api(d),
+                    "status": status
+                })
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error generating installments: {e}")
+            return []
+
+    @staticmethod
     def _is_portfolio_stale(upload_date: datetime) -> bool:
         """
         Determines if a portfolio is stale based on SEBI's 10-day monthly disclosure rule.
@@ -249,7 +313,12 @@ class HoldingsService:
             return False
 
     @staticmethod
-    def process_and_save_holdings(fund_name, excel_file, user_id, scheme_code=None, invested_amount=None, invested_date=None, nickname=None):
+    def process_and_save_holdings(
+        fund_name, excel_file, user_id, scheme_code=None, 
+        invested_amount=None, invested_date=None, nickname=None,
+        investment_type="lumpsum", sip_amount=0.0, sip_day=None, manual_total_units=0.0,
+        manual_invested_amount=0.0
+    ):
         # 1. Read Excel
         try:
             df_raw = pd.read_excel(excel_file.file, header=None)
@@ -424,22 +493,70 @@ class HoldingsService:
                 logger.warning(f"Could not find scheme code for '{fund_name}'")
 
         # 6. Save to DB (Strict Schema)
-        from models.db_schemas import HoldingsDocument, HoldingItem
+        from models.db_schemas import HoldingsDocument, HoldingItem, SIPInstallment
         from datetime import datetime
+
         
         # Validated List
         validated_holdings = []
         for h in holdings_list:
              validated_holdings.append(HoldingItem(**h))
 
+        
+        # SIP Logic Check
+        sip_installments = []
+        final_invested_amount = invested_amount
+        future_sip_units = 0.0 # Initially zero for a fresh upload
+        
+        if investment_type == "sip":
+            # Generate Installments
+            dates_info = HoldingsService.generate_installment_dates(invested_date, sip_day)
+            
+            # For SIP: invested_amount = manual (CAS) + future app-tracked
+            # On initial upload, future_tracked = 0, so invested_amount = manual_invested_amount
+            future_tracked_invested = 0.0
+            
+            for item in dates_info:
+                d_str = item["date"]
+                status = item["status"]
+                
+                # Past dates marked as ASSUMED_PAID - they don't affect invested_amount
+                # Only PENDING (today) stays as PENDING
+                # Note: ASSUMED_PAID means we assume user paid, but we don't add to tracked amount
+                # because that's already in manual_invested_amount
+                if status == "PAID":
+                    status = "ASSUMED_PAID"  # Change to ASSUMED_PAID for past installments
+                
+                inst = SIPInstallment(
+                    date=d_str,
+                    amount=sip_amount,
+                    status=status
+                )
+                sip_installments.append(inst)
+            
+            # Total invested = CAS amount + app-tracked (0 on initial upload)
+            final_invested_amount = manual_invested_amount + future_tracked_invested
+
         doc_data = {
             "fund_name": fund_name,
             "user_id": user_id,
             "scheme_code": scheme_code,
-            "invested_amount": invested_amount,
+            "invested_amount": final_invested_amount,
             "invested_date": invested_date,
             "nickname": nickname,
             "holdings": validated_holdings,
+            
+            # SIP Fields
+            "investment_type": investment_type,
+            "sip_amount": sip_amount,
+            "sip_start_date": invested_date if investment_type == "sip" else None,
+            "sip_frequency": "Monthly",
+            "sip_day": sip_day,
+            "manual_total_units": manual_total_units,
+            "manual_invested_amount": manual_invested_amount if investment_type == "sip" else 0.0,
+            "future_sip_units": future_sip_units,
+            "sip_installments": sip_installments,
+            
             "last_updated": True,
             "created_at": datetime.utcnow()
         }
@@ -455,9 +572,17 @@ class HoldingsService:
         query = {
             "fund_name": fund_name,
             "user_id": user_id,
-            "invested_amount": invested_amount,
-            "invested_date": invested_date
+            # For SIP, uniqueness is just fund_name + user for now to allow updates.
+            # But the logic below includes amount/date in query which separates different investments in same fund.
+            # We should probably keep this behavior but be careful.
+            "invested_date": invested_date, 
+            "investment_type": investment_type
         }
+        # If Lumpsum, also match amount to differentiate multiple lumpsums
+        if investment_type == "lumpsum":
+             query["invested_amount"] = invested_amount
+        # If SIP, sip details differentiate? Just assume one SIP per Fund/Date for now for simplicity
+
         # Dump model to dict for Mongo
         holdings_collection.update_one(query, {"$set": doc_model.dict()}, upsert=True)
         
@@ -493,5 +618,131 @@ class HoldingsService:
             "candidates": candidates if not scheme_code else None, # Return candidates if still ambiguous
             "requires_selection": True if (not scheme_code and candidates) else False
         }
+
+    def handle_sip_action(self, fund_id, user_id, date_str, action):
+        """
+        Updates the status of a specific SIP installment.
+        If PAID, calculates units based on NAV and adds to future_sip_units.
+        """
+        try:
+            doc = holdings_collection.find_one({"_id": ObjectId(fund_id), "user_id": user_id})
+            if not doc:
+                return {"error": "Fund not found"}
+            
+            installments = doc.get("sip_installments", [])
+            sip_amount = float(doc.get("sip_amount", 0) or 0)
+            scheme_code = doc.get("scheme_code")
+            
+            updated = False
+            for inst in installments:
+                if inst["date"] == date_str:
+                    old_status = inst.get("status")
+                    if old_status == action: 
+                         return {"message": "No change needed", "status": action}
+                         
+                    inst["status"] = action
+                    updated = True
+                    
+                    if action == "PAID":
+                        # User confirmed payment - invested_amount will be updated below
+                        # Now check if NAV is available for unit allocation
+                        from services.nav_service import nav_service  # Local import to avoid circular dep
+                        from utils.date_utils import parse_date_from_str, get_current_ist_time
+                        
+                        # Get the next official NAV on or after the SIP date
+                        nav_res = nav_service.get_next_nav_after_date(scheme_code, date_str)
+                        
+                        if nav_res:
+                            nav = nav_res[0]
+                            nav_date_used = nav_res[1] if len(nav_res) > 1 else None
+                            
+                            # Check if this NAV is actually from the SIP date or later
+                            # (not from before, which would mean NAV API returned old data)
+                            try:
+                                sip_date = parse_date_from_str(date_str).date()
+                                used_date = parse_date_from_str(nav_date_used).date() if nav_date_used else None
+                                
+                                if used_date and used_date >= sip_date:
+                                    # NAV is available for this SIP date or later
+                                    # Calculate units - marked as ESTIMATED (T+1 settlement)
+                                    units = sip_amount / nav
+                                    inst["units"] = units
+                                    inst["nav"] = nav
+                                    inst["nav_date"] = nav_date_used
+                                    inst["allocation_status"] = "ESTIMATED"
+                                    inst["is_estimated"] = True
+                                else:
+                                    # NAV is from before SIP date - units pending
+                                    inst["units"] = None
+                                    inst["nav"] = None
+                                    inst["nav_date"] = None
+                                    inst["allocation_status"] = "PENDING_NAV"
+                                    inst["is_estimated"] = False
+                            except:
+                                # Date parsing failed - treat as pending
+                                inst["units"] = None
+                                inst["nav"] = None
+                                inst["allocation_status"] = "PENDING_NAV"
+                                inst["is_estimated"] = False
+                        else:
+                            # No NAV available at all - units pending
+                            inst["units"] = None
+                            inst["nav"] = None
+                            inst["nav_date"] = None
+                            inst["allocation_status"] = "PENDING_NAV"
+                            inst["is_estimated"] = False
+                            
+                    elif action == "SKIPPED":
+                        inst["units"] = None
+                        inst["nav"] = None
+                        inst["nav_date"] = None
+                        inst["allocation_status"] = "PENDING_NAV"  # Not applicable but safe default
+                    
+                    break
+            
+            if not updated:
+                return {"error": "Installment for date not found"}
+            
+            # Recalculate Totals
+            # INVESTED AMOUNT: All PAID installments add to invested (money is gone)
+            # UNITS: Only installments with allocated units (not None) count
+            # ASSUMED_PAID does not add to invested_amount (already in manual)
+            manual_invested = float(doc.get("manual_invested_amount", 0) or 0)
+            total_tracked_invested = 0.0
+            total_future_units = 0.0
+            has_pending_nav = False  # Track if any installment is waiting for NAV
+            
+            for inst in installments:
+                if inst["status"] == "PAID":
+                    # Invested amount always includes confirmed SIPs
+                    total_tracked_invested += float(inst.get("amount", 0))
+                    
+                    # Units only count if they're allocated (not None)
+                    units_val = inst.get("units")
+                    if units_val is not None:
+                        total_future_units += float(units_val)
+                    else:
+                        has_pending_nav = True
+            
+            # Total invested = manual (CAS) + app-tracked (confirmed)
+            total_invested = manual_invested + total_tracked_invested
+            
+            holdings_collection.update_one(
+                {"_id": ObjectId(fund_id)},
+                {
+                    "$set": {
+                        "sip_installments": installments,
+                        "invested_amount": total_invested,
+                        "future_sip_units": total_future_units,
+                        "last_updated": True
+                    }
+                }
+            )
+            
+            return {"message": "SIP Action Recorded", "status": action}
+            
+        except Exception as e:
+            logger.error(f"Error handling SIP action: {e}")
+            return {"error": str(e)}
 
 holdings_service = HoldingsService()
