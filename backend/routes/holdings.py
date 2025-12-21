@@ -33,6 +33,11 @@ async def upload(
     sip_day: str = Form(None),
     total_units: str = Form(None),
     total_invested_amount: str = Form(None),  # CAS Invested Amount
+    # Step-Up SIP Fields
+    stepup_enabled: str = Form("false"),  # "true" or "false"
+    stepup_type: str = Form("percentage"),  # "percentage" or "amount"
+    stepup_value: str = Form(None),  # e.g., "10" for 10% or "500" for ₹500
+    stepup_frequency: str = Form("Annual"),  # "Annual", "Half-Yearly", "Quarterly"
     current_user: dict = Depends(get_current_user)
 ):
     user_id = str(current_user["_id"])
@@ -98,11 +103,38 @@ async def upload(
     if not re.match(r"^\d{2}-\d{2}-\d{4}$", invested_date):
             raise HTTPException(422, "Invalid date format. Use DD-MM-YYYY.")
     
+    # 5. Parse Step-Up Fields (only for SIP)
+    stepup_enabled_bool = False
+    stepup_value_float = None
+    stepup_type_str = "percentage"
+    stepup_frequency_str = "Annual"
+    
+    if investment_type == "sip":
+        stepup_enabled_bool = stepup_enabled.lower() == "true"
+        
+        if stepup_enabled_bool:
+            stepup_type_str = stepup_type if stepup_type in ["percentage", "amount"] else "percentage"
+            stepup_frequency_str = stepup_frequency if stepup_frequency in ["Annual", "Half-Yearly", "Quarterly"] else "Annual"
+            
+            if stepup_value and stepup_value.strip():
+                try:
+                    stepup_value_float = float(stepup_value)
+                    if stepup_value_float <= 0:
+                        raise HTTPException(422, "Step-up value must be positive.")
+                except ValueError:
+                    raise HTTPException(422, "Step-up value must be a valid number.")
+            else:
+                raise HTTPException(422, "Step-up value is required when step-up is enabled.")
+    
     # Process
     manual_invested_for_service = manual_invested_amount_float if investment_type == "sip" else 0.0
     save_result = holdings_service.process_and_save_holdings(
         fund_name, file, user_id, scheme_code, amount_float, invested_date, nickname,
-        investment_type, sip_amount_float, sip_day_int, manual_total_units_float, manual_invested_for_service
+        investment_type, sip_amount_float, sip_day_int, manual_total_units_float, manual_invested_for_service,
+        stepup_enabled=stepup_enabled_bool,
+        stepup_type=stepup_type_str,
+        stepup_value=stepup_value_float,
+        stepup_frequency=stepup_frequency_str
     )
     
     if "error" in save_result:

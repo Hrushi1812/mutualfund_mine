@@ -1,5 +1,5 @@
 import React, { useState, useContext, useRef } from 'react';
-import { Upload, Calendar, FileSpreadsheet, CheckCircle2, AlertCircle, IndianRupee, X, Loader2, RefreshCw } from 'lucide-react';
+import { Upload, Calendar, FileSpreadsheet, CheckCircle2, AlertCircle, IndianRupee, X, Loader2, RefreshCw, TrendingUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../api';
 import { PortfolioContext } from '../../context/PortfolioContext';
@@ -15,6 +15,12 @@ const UploadSIP = () => {
     const [totalUnits, setTotalUnits] = useState('');
     const [totalInvestedAmount, setTotalInvestedAmount] = useState('');
     const fileInputRef = useRef(null);
+
+    // Step-Up SIP State
+    const [stepupEnabled, setStepupEnabled] = useState(false);
+    const [stepupType, setStepupType] = useState('percentage');
+    const [stepupValue, setStepupValue] = useState('');
+    const [stepupFrequency, setStepupFrequency] = useState('Annual');
 
     // Ambiguity Handling
     const [showModal, setShowModal] = useState(false);
@@ -58,6 +64,12 @@ const UploadSIP = () => {
             return;
         }
 
+        // Step-up validation
+        if (stepupEnabled && (!stepupValue || parseFloat(stepupValue) <= 0)) {
+            setMessage({ type: 'error', text: 'Please enter a valid step-up value.' });
+            return;
+        }
+
         setLoading(true);
         const formData = new FormData();
         formData.append('fund_name', fundName);
@@ -74,6 +86,12 @@ const UploadSIP = () => {
         formData.append('sip_day', sipDay);
         formData.append('total_units', totalUnits);
         formData.append('total_invested_amount', totalInvestedAmount);
+
+        // Step-Up SIP fields
+        formData.append('stepup_enabled', stepupEnabled ? 'true' : 'false');
+        formData.append('stepup_type', stepupType);
+        formData.append('stepup_value', stepupValue || '');
+        formData.append('stepup_frequency', stepupFrequency);
 
         if (nickname) formData.append('nickname', nickname);
 
@@ -124,6 +142,12 @@ const UploadSIP = () => {
         setSipDay('');
         setTotalUnits('');
         setTotalInvestedAmount('');
+        // Reset step-up fields
+        setStepupEnabled(false);
+        setStepupType('percentage');
+        setStepupValue('');
+        setStepupFrequency('Annual');
+        // Reset modal state
         setPendingFundId(null);
         setCandidates([]);
         setSelectedScheme(null);
@@ -314,15 +338,115 @@ const UploadSIP = () => {
                     <p className="text-[10px] text-zinc-500 mt-1">From CAS or email. App tracks new investments separately.</p>
                 </div>
 
-                {/* Step-up Coming Soon Badge */}
-                <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-1 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-full text-[10px] font-medium text-purple-300 flex items-center gap-1">
-                        <span className="relative flex h-1.5 w-1.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-purple-400"></span>
-                        </span>
-                        Step-up SIP Coming Soon
-                    </span>
+                {/* Step-Up SIP Configuration */}
+                <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-xl p-4 space-y-4">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                        <div className="relative">
+                            <input
+                                type="checkbox"
+                                checked={stepupEnabled}
+                                onChange={(e) => setStepupEnabled(e.target.checked)}
+                                className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-white/10 rounded-full peer peer-checked:bg-purple-500 transition-colors" />
+                            <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <TrendingUp className="w-4 h-4 text-purple-400" />
+                            <span className="text-sm font-medium text-white">Enable Step-Up SIP</span>
+                        </div>
+                    </label>
+
+                    <AnimatePresence>
+                        {stepupEnabled && (
+                            <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="space-y-4 overflow-hidden"
+                            >
+                                {/* Step-up Type */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setStepupType('percentage')}
+                                        className={`py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${stepupType === 'percentage'
+                                                ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30'
+                                                : 'bg-white/5 text-zinc-400 hover:bg-white/10'
+                                            }`}
+                                    >
+                                        Percentage (%)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setStepupType('amount')}
+                                        className={`py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${stepupType === 'amount'
+                                                ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30'
+                                                : 'bg-white/5 text-zinc-400 hover:bg-white/10'
+                                            }`}
+                                    >
+                                        Fixed Amount (₹)
+                                    </button>
+                                </div>
+
+                                {/* Step-up Value & Frequency */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                                            {stepupType === 'percentage' ? 'Increase by (%)' : 'Increase by (₹)'}
+                                        </label>
+                                        <div className="relative">
+                                            {stepupType === 'amount' && (
+                                                <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                                            )}
+                                            <input
+                                                type="number"
+                                                value={stepupValue}
+                                                onChange={(e) => setStepupValue(e.target.value)}
+                                                placeholder={stepupType === 'percentage' ? '10' : '500'}
+                                                className={`w-full bg-white/5 border border-white/10 rounded-xl ${stepupType === 'amount' ? 'pl-10' : 'pl-4'} pr-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-purple-500 transition-colors`}
+                                            />
+                                            {stepupType === 'percentage' && (
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500">%</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Frequency</label>
+                                        <select
+                                            value={stepupFrequency}
+                                            onChange={(e) => setStepupFrequency(e.target.value)}
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-colors appearance-none cursor-pointer"
+                                        >
+                                            <option value="Annual" className="bg-zinc-900">Annual</option>
+                                            <option value="Half-Yearly" className="bg-zinc-900">Half-Yearly</option>
+                                            <option value="Quarterly" className="bg-zinc-900">Quarterly</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* Preview */}
+                                {sipAmount && stepupValue && (
+                                    <div className="bg-black/20 rounded-lg p-3 border border-white/5">
+                                        <p className="text-xs text-zinc-400 mb-1">💡 Preview (Next 3 periods)</p>
+                                        <p className="text-sm text-white font-mono">
+                                            {(() => {
+                                                const base = parseFloat(sipAmount) || 0;
+                                                const val = parseFloat(stepupValue) || 0;
+                                                const calc = (period) => {
+                                                    if (stepupType === 'percentage') {
+                                                        return Math.round(base * Math.pow(1 + val / 100, period));
+                                                    }
+                                                    return Math.round(base + val * period);
+                                                };
+                                                return `₹${base.toLocaleString()} → ₹${calc(1).toLocaleString()} → ₹${calc(2).toLocaleString()}`;
+                                            })()}
+                                        </p>
+                                    </div>
+                                )}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
 
                 {/* Submit Action */}

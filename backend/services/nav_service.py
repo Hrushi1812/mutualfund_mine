@@ -784,10 +784,15 @@ class NavService:
             # Only calculate if we have current value and confirmed installments with units
             if current_value > 0 and installments and units > 0:
                 try:
+                    manual_invested = float(doc.get("manual_invested_amount", 0) or 0)
+                    sip_start = doc.get("sip_start_date") or doc.get("invested_date")
+                    
                     xirr_value = calculate_sip_xirr(
                         installments=installments,
                         current_value=current_value,
-                        current_date=d0_date
+                        current_date=d0_date,
+                        manual_invested_amount=manual_invested,
+                        sip_start_date=sip_start
                     )
                     if xirr_value is not None:
                         xirr_value = round(xirr_value, 2)

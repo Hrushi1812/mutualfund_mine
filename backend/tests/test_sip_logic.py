@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # Mock fyers_service BEFORE importing nav_service (to avoid import errors)
 sys.modules['services.fyers_service'] = MagicMock()
 
-from services.holdings_service import HoldingsService
+from services.holdings_service import HoldingsService, apply_stepup_if_due, months_between
 from services.nav_service import NavService
 from models.db_schemas import SIPInstallment
 
@@ -93,6 +93,123 @@ class TestSIPLogic(unittest.TestCase):
              self.assertEqual(res["pnl"], -2800.0)
              self.assertEqual(len(res["sip_pending_installments"]), 1)
              self.assertEqual(res["sip_pending_installments"][0]["date"], "01-02-2023")
+
+
+class TestStepUpLogic(unittest.TestCase):
+    """State-transition focused tests for Step-Up SIP logic."""
+    
+    def test_months_between(self):
+        """Test months_between helper function."""
+        self.assertEqual(months_between(date(2024, 1, 1), date(2024, 12, 1)), 11)
+        self.assertEqual(months_between(date(2024, 1, 1), date(2025, 1, 1)), 12)
+        self.assertEqual(months_between(date(2024, 6, 15), date(2024, 6, 15)), 0)
+        self.assertEqual(months_between(date(2024, 1, 1), date(2024, 7, 1)), 6)
+        
+    def test_stepup_first_year(self):
+        """First year: Base amount used, no step-up applied."""
+        new_amount, new_date = apply_stepup_if_due(
+            current_amount=5000,
+            last_stepup_date=date(2024, 1, 1),
+            today=date(2024, 6, 1),  # 5 months elapsed
+            stepup_type="percentage",
+            stepup_value=10,
+            stepup_frequency="Annual"
+        )
+        # Not enough time elapsed for annual step-up
+        self.assertEqual(new_amount, 5000)
+        self.assertEqual(new_date, date(2024, 1, 1))
+        
+    def test_stepup_anniversary_percentage(self):
+        """Step-up anniversary: Amount increases once by percentage."""
+        new_amount, new_date = apply_stepup_if_due(
+            current_amount=5000,
+            last_stepup_date="01-01-2024",
+            today=date(2025, 1, 15),  # 12+ months elapsed
+            stepup_type="percentage",
+            stepup_value=10,
+            stepup_frequency="Annual"
+        )
+        # 10% increase: 5000 * 1.1 = 5500
+        self.assertEqual(new_amount, 5500.0)
+        
+    def test_stepup_anniversary_fixed_amount(self):
+        """Step-up anniversary: Amount increases once by fixed amount."""
+        new_amount, new_date = apply_stepup_if_due(
+            current_amount=5000,
+            last_stepup_date="01-01-2024",
+            today=date(2025, 2, 1),  # 13 months elapsed
+            stepup_type="amount",
+            stepup_value=500,
+            stepup_frequency="Annual"
+        )
+        # Fixed increase: 5000 + 500 = 5500
+        self.assertEqual(new_amount, 5500.0)
+        
+    def test_stepup_half_yearly(self):
+        """Half-yearly step-up applied after 6 months."""
+        new_amount, new_date = apply_stepup_if_due(
+            current_amount=5000,
+            last_stepup_date=date(2024, 1, 1),
+            today=date(2024, 7, 1),  # Exactly 6 months
+            stepup_type="percentage",
+            stepup_value=5,
+            stepup_frequency="Half-Yearly"
+        )
+        # 5% increase: 5000 * 1.05 = 5250
+        self.assertEqual(new_amount, 5250.0)
+        
+    def test_stepup_quarterly(self):
+        """Quarterly step-up applied after 3 months."""
+        new_amount, new_date = apply_stepup_if_due(
+            current_amount=5000,
+            last_stepup_date=date(2024, 1, 1),
+            today=date(2024, 4, 1),  # Exactly 3 months
+            stepup_type="amount",
+            stepup_value=200,
+            stepup_frequency="Quarterly"
+        )
+        # Fixed increase: 5000 + 200 = 5200
+        self.assertEqual(new_amount, 5200.0)
+        
+    def test_stepup_no_catch_up(self):
+        """App inactive: Only ONE step-up applied even if multiple periods passed."""
+        # 3 years have passed, but only 1 step-up should be applied
+        new_amount, new_date = apply_stepup_if_due(
+            current_amount=5000,
+            last_stepup_date="01-01-2021",
+            today=date(2024, 3, 1),  # 38 months elapsed (3+ years)
+            stepup_type="percentage",
+            stepup_value=10,
+            stepup_frequency="Annual"
+        )
+        # Only ONE step-up applied, not compounded
+        self.assertEqual(new_amount, 5500.0)  # Not 5000 * 1.1^3 = 6655
+        
+    def test_stepup_disabled(self):
+        """Step-up disabled: Amount freezes (no change)."""
+        new_amount, new_date = apply_stepup_if_due(
+            current_amount=5000,
+            last_stepup_date=date(2024, 1, 1),
+            today=date(2026, 1, 1),  # 2 years elapsed
+            stepup_type="percentage",
+            stepup_value=None,  # No step-up value = disabled
+            stepup_frequency="Annual"
+        )
+        # No change when step-up is disabled
+        self.assertEqual(new_amount, 5000)
+        
+    def test_stepup_zero_value(self):
+        """Step-up with zero value: No change."""
+        new_amount, new_date = apply_stepup_if_due(
+            current_amount=5000,
+            last_stepup_date=date(2024, 1, 1),
+            today=date(2025, 6, 1),
+            stepup_type="percentage",
+            stepup_value=0,
+            stepup_frequency="Annual"
+        )
+        self.assertEqual(new_amount, 5000)
+
 
 if __name__ == '__main__':
     unittest.main()

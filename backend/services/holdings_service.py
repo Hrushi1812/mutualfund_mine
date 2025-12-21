@@ -160,6 +160,59 @@ def get_scheme_candidates(query):
         logger.warning(f"Search error for '{query}': {e}")
     return []
 
+
+# --- Step-Up SIP Logic (State-Based) ---
+
+def months_between(date1, date2):
+    """Calculate months between two dates. Returns positive if date2 > date1."""
+    if isinstance(date1, str):
+        date1 = parse_date_from_str(date1).date()
+    if isinstance(date2, str):
+        date2 = parse_date_from_str(date2).date()
+    return (date2.year - date1.year) * 12 + (date2.month - date1.month)
+
+
+def apply_stepup_if_due(current_amount, last_stepup_date, today,
+                        stepup_type, stepup_value, stepup_frequency):
+    """
+    Apply step-up ONCE per cycle if due. Never catch up missed periods.
+    
+    Returns: (new_amount, new_last_stepup_date)
+    """
+    if not stepup_value or stepup_value <= 0:
+        return current_amount, last_stepup_date
+
+    freq_map = {"Annual": 12, "Half-Yearly": 6, "Quarterly": 3}
+    required_months = freq_map.get(stepup_frequency, 12)
+    
+    # Parse dates
+    if isinstance(last_stepup_date, str):
+        last_stepup_dt = parse_date_from_str(last_stepup_date).date()
+    else:
+        last_stepup_dt = last_stepup_date
+        
+    if isinstance(today, str):
+        today_dt = parse_date_from_str(today).date()
+    else:
+        today_dt = today
+    
+    months_elapsed = months_between(last_stepup_dt, today_dt)
+    
+    if months_elapsed < required_months:
+        return current_amount, last_stepup_date  # Not due yet
+    
+    # Apply step-up ONCE
+    if stepup_type == "percentage":
+        new_amount = current_amount * (1 + stepup_value / 100)
+    else:  # fixed amount
+        new_amount = current_amount + stepup_value
+    
+    # Round to 2 decimal places
+    new_amount = round(new_amount, 2)
+    
+    return new_amount, format_date_for_api(today_dt)
+
+
 # --- Main Service Class ---
 
 class HoldingsService:
@@ -316,7 +369,9 @@ class HoldingsService:
         fund_name, excel_file, user_id, scheme_code=None, 
         invested_amount=None, invested_date=None, nickname=None,
         investment_type="lumpsum", sip_amount=0.0, sip_day=None, manual_total_units=0.0,
-        manual_invested_amount=0.0
+        manual_invested_amount=0.0,
+        # Step-Up SIP Config
+        stepup_enabled=False, stepup_type="percentage", stepup_value=None, stepup_frequency="Annual"
     ):
         # 1. Read Excel
         try:
@@ -551,6 +606,16 @@ class HoldingsService:
             "manual_invested_amount": manual_invested_amount if investment_type == "sip" else 0.0,
             "future_sip_units": future_sip_units,
             "sip_installments": sip_installments,
+            
+            # Step-Up SIP Config
+            "stepup_enabled": stepup_enabled if investment_type == "sip" else False,
+            "stepup_type": stepup_type if stepup_enabled else "percentage",
+            "stepup_value": stepup_value if stepup_enabled else None,
+            "stepup_frequency": stepup_frequency if stepup_enabled else "Annual",
+            
+            # Step-Up State (Source of Truth)
+            "current_sip_amount": sip_amount if investment_type == "sip" else None,
+            "last_stepup_applied_on": invested_date if (investment_type == "sip" and stepup_enabled) else None,
             
             "last_updated": True,
             "created_at": datetime.utcnow()

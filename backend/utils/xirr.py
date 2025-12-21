@@ -208,19 +208,26 @@ parse_date = _parse_date
 def calculate_sip_xirr(
     installments: List[dict],
     current_value: float,
-    current_date: Union[str, date, datetime] = None
+    current_date: Union[str, date, datetime] = None,
+    manual_invested_amount: float = 0.0,
+    sip_start_date: Union[str, date, datetime] = None
 ) -> Optional[float]:
     """
     Calculate XIRR specifically for SIP investments.
     
     Args:
         installments: List of SIP installment dicts with 'date', 'amount', 'status'
-                      Only PAID installments are considered
         current_value: Current portfolio value
         current_date: Date for current value (defaults to today)
+        manual_invested_amount: Amount invested before app tracking (from CAS)
+        sip_start_date: Start date for manual_invested_amount cashflow
         
     Returns:
         XIRR as percentage or None
+        
+    Note:
+        - ASSUMED_PAID installments are ignored (covered by manual_invested_amount)
+        - Only PAID installments are added as individual cashflows
     """
     from datetime import date as date_type
     
@@ -231,11 +238,20 @@ def calculate_sip_xirr(
     
     cash_flows = []
     
-    # Add installments as negative cash flows (investments)
-    # Include both PAID (confirmed) and ASSUMED_PAID (covered by Till Upload amount)
+    # Add manual_invested_amount as single lump sum at start date
+    # This covers all ASSUMED_PAID installments
+    if manual_invested_amount > 0 and sip_start_date:
+        try:
+            start_dt = parse_date(sip_start_date)
+            cash_flows.append((start_dt, -manual_invested_amount))  # Negative = investment
+        except (ValueError, TypeError):
+            pass
+    
+    # Add only PAID installments as individual cashflows (investments after tracking)
+    # ASSUMED_PAID are already covered by manual_invested_amount above
     for inst in installments:
         status = inst.get("status", "")
-        if status in ("PAID", "ASSUMED_PAID"):
+        if status == "PAID":  # Only PAID, not ASSUMED_PAID
             try:
                 inst_date = parse_date(inst["date"])
                 amount = float(inst.get("amount", 0))
@@ -245,9 +261,10 @@ def calculate_sip_xirr(
                 continue
     
     if not cash_flows:
-        return None  # No confirmed investments
+        return None  # No investments to calculate
     
     # Add current value as positive cash flow (return)
     cash_flows.append((current_date, current_value))
     
     return calculate_xirr(cash_flows)
+

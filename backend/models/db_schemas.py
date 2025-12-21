@@ -43,6 +43,16 @@ class HoldingsDocument(BaseModel):
     future_sip_units: float = 0.0 # Accumulated units from tracked installments
     sip_installments: List[SIPInstallment] = []
     
+    # Step-Up SIP Config
+    stepup_enabled: bool = False
+    stepup_type: Optional[Literal["percentage", "amount"]] = "percentage"
+    stepup_value: Optional[float] = None  # Percentage (10) or Fixed Amount (500)
+    stepup_frequency: Optional[Literal["Annual", "Half-Yearly", "Quarterly"]] = "Annual"
+    
+    # Step-Up State (Source of Truth)
+    current_sip_amount: Optional[float] = None  # Always use this for new installments
+    last_stepup_applied_on: Optional[str] = None  # DD-MM-YYYY
+    
     holdings: List[HoldingItem]
     last_updated: bool = True # Legacy field, maybe change to datetime?
     

@@ -265,7 +265,7 @@ pytest tests/ -v
 - [x] Lumpsum investment tracking
 - [x] SIP investment tracking
 - [x] Fyers API integration
-- [x] XIRR calculation for accurate returns
+- [ ] XIRR calculation for accurate returns
 - [ ] Step-up SIP support
 
 ---
