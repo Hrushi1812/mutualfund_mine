@@ -136,10 +136,6 @@ const UploadLumpsum = () => {
                         placeholder="e.g. Nippon India Multi Cap Fund"
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors"
                     />
-                    <p className="text-[10px] text-amber-400/80 mt-1 flex items-center gap-1">
-                        <span className="inline-block w-1.5 h-1.5 bg-amber-400/80 rounded-full"></span>
-                        IDCW (Dividend) funds support coming soon
-                    </p>
                 </div>
 
                 {/* Nickname (Optional) */}
@@ -198,6 +194,9 @@ const UploadLumpsum = () => {
                             )}
                         </div>
                     </div>
+                    <p className="text-xs text-zinc-500 mt-2">
+                        Check monthly portfolio disclosures from your fund house (via email)
+                    </p>
                 </div>
 
                 {/* Details Row */}

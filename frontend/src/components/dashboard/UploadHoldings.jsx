@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, TrendingUp, RefreshCw } from 'lucide-react';
+import { Upload, TrendingUp, RefreshCw, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import UploadLumpsum from './UploadLumpsum';
 import UploadSIP from './UploadSIP';
@@ -23,6 +23,12 @@ const UploadHoldings = () => {
                 Upload Portfolio
             </h2>
 
+            {/* Info Notice for Unsupported Plan Types */}
+            <p className="mb-6 text-sm text-zinc-500 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                Only Growth plans supported. IDCW & Bonus plans not supported.
+            </p>
+
             {/* Tab Navigation */}
             <div className="mb-8">
                 <div className="flex bg-white/5 p-1.5 rounded-2xl w-full border border-white/10">
@@ -30,8 +36,8 @@ const UploadHoldings = () => {
                         type="button"
                         onClick={() => setActiveTab('lumpsum')}
                         className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${activeTab === 'lumpsum'
-                                ? 'bg-primary text-white shadow-lg shadow-primary/25'
-                                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                            ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                            : 'text-zinc-400 hover:text-white hover:bg-white/5'
                             }`}
                     >
                         <TrendingUp className="w-4 h-4" />
@@ -41,8 +47,8 @@ const UploadHoldings = () => {
                         type="button"
                         onClick={() => setActiveTab('sip')}
                         className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${activeTab === 'sip'
-                                ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-purple-500/25'
-                                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                            ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-purple-500/25'
+                            : 'text-zinc-400 hover:text-white hover:bg-white/5'
                             }`}
                     >
                         <RefreshCw className="w-4 h-4" />

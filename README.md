@@ -267,7 +267,6 @@ pytest tests/ -v
 - [x] Fyers API integration
 - [x] XIRR calculation for accurate returns
 - [ ] Step-up SIP support
-- [ ] IDCW (Dividend) tracking
 
 ---
 
