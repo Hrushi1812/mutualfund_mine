@@ -80,6 +80,15 @@ const LoginPage = () => {
                         </div>
                     </div>
 
+                    <div className="flex justify-end">
+                        <Link
+                            to="/forgot-password"
+                            className="text-brand-muted text-xs hover:text-brand-accent transition-colors"
+                        >
+                            Forgot Password?
+                        </Link>
+                    </div>
+
                     <button
                         type="submit"
                         disabled={loading}
