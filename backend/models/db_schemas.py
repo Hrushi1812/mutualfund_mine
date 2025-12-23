@@ -30,6 +30,7 @@ class HoldingsDocument(BaseModel):
     nickname: Optional[str] = None
     # Investment Details
     investment_type: Literal["lumpsum", "sip"] = "lumpsum"
+    sip_mode: Optional[Literal["simple", "detailed"]] = "simple"  # simple: totals only, detailed: full history
     
     # SIP Specific Config
     sip_amount: Optional[float] = 0.0

@@ -204,6 +204,31 @@ def _bisection_xirr(
 parse_date = _parse_date
 
 
+# Stamp duty rate for mutual funds (0.005% = 0.00005)
+# SEBI-mandated, applies to every MF purchase
+STAMP_DUTY_RATE = 0.00005
+
+
+def _apply_stamp_duty(amount: float) -> float:
+    """
+    Calculate total investment amount including stamp duty.
+    Stamp duty on MF purchases is 0.005% of the transaction value.
+    
+    Uses standard rounding to nearest paisa (as shown in CAS):
+    - ₹100 × 0.005% = ₹0.005 → rounds to ₹0.00 (no stamp duty)
+    - ₹200 × 0.005% = ₹0.01 → stays ₹0.01
+    
+    Examples:
+        ₹100.00 → ₹100.00 (stamp duty ₹0.00)
+        ₹199.99 → ₹200.00 (stamp duty ₹0.01)
+        ₹200.00 → ₹200.01 (stamp duty ₹0.01)
+    """
+    stamp_duty = amount * STAMP_DUTY_RATE
+    # Standard rounding to nearest paisa (0.01)
+    stamp_duty = round(stamp_duty, 2)
+    return round(amount + stamp_duty, 2)
+
+
 # Convenience function for SIP calculations
 def calculate_sip_xirr(
     installments: List[dict],
@@ -219,15 +244,16 @@ def calculate_sip_xirr(
         installments: List of SIP installment dicts with 'date', 'amount', 'status'
         current_value: Current portfolio value
         current_date: Date for current value (defaults to today)
-        manual_invested_amount: Amount invested before app tracking (from CAS)
-        sip_start_date: Start date for manual_invested_amount cashflow
+        manual_invested_amount: DEPRECATED - kept for backward compatibility, ignored
+        sip_start_date: DEPRECATED - kept for backward compatibility, ignored
         
     Returns:
         XIRR as percentage or None
         
     Note:
-        - ASSUMED_PAID installments are ignored (covered by manual_invested_amount)
-        - Only PAID installments are added as individual cashflows
+        Each installment (PAID and ASSUMED_PAID) is treated as a separate cash flow
+        at its actual date. CAS amounts ARE the actual invested amounts - stamp duty
+        is already included implicitly and units are already adjusted.
     """
     from datetime import date as date_type
     
@@ -238,24 +264,17 @@ def calculate_sip_xirr(
     
     cash_flows = []
     
-    # Add manual_invested_amount as single lump sum at start date
-    # This covers all ASSUMED_PAID installments
-    if manual_invested_amount > 0 and sip_start_date:
-        try:
-            start_dt = parse_date(sip_start_date)
-            cash_flows.append((start_dt, -manual_invested_amount))  # Negative = investment
-        except (ValueError, TypeError):
-            pass
-    
-    # Add only PAID installments as individual cashflows (investments after tracking)
-    # ASSUMED_PAID are already covered by manual_invested_amount above
+    # Add ALL installments (PAID and ASSUMED_PAID) as individual cash flows
+    # CAS amounts ARE the actual cashflows - stamp duty is included implicitly
+    # Units are already adjusted for stamp duty deduction
     for inst in installments:
         status = inst.get("status", "")
-        if status == "PAID":  # Only PAID, not ASSUMED_PAID
+        if status in ("PAID", "ASSUMED_PAID"):
             try:
                 inst_date = parse_date(inst["date"])
                 amount = float(inst.get("amount", 0))
                 if amount > 0:
+                    # Use raw amount as cashflow (stamp duty already included in CAS)
                     cash_flows.append((inst_date, -amount))  # Negative = investment
             except (ValueError, KeyError):
                 continue

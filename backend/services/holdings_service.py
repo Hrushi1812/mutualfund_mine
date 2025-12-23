@@ -371,7 +371,11 @@ class HoldingsService:
         investment_type="lumpsum", sip_amount=0.0, sip_day=None, manual_total_units=0.0,
         manual_invested_amount=0.0,
         # Step-Up SIP Config
-        stepup_enabled=False, stepup_type="percentage", stepup_value=None, stepup_frequency="Annual"
+        stepup_enabled=False, stepup_type="percentage", stepup_value=None, stepup_frequency="Annual",
+        # Detailed SIP Mode
+        sip_mode="simple", detailed_installments=None,
+        # CAS Cost Value (includes stamp duty)
+        cas_cost_value=None
     ):
         # 1. Read Excel
         try:
@@ -563,29 +567,69 @@ class HoldingsService:
         future_sip_units = 0.0 # Initially zero for a fresh upload
         
         if investment_type == "sip":
-            # Generate Installments - if user provided 'Till Upload' amount, past installments are covered
-            has_manual = manual_invested_amount > 0
-            dates_info = HoldingsService.generate_installment_dates(invested_date, sip_day, has_manual_amount=has_manual)
-            
-            # For SIP: invested_amount = manual (CAS) + future app-tracked
-            # On initial upload, future_tracked = 0, so invested_amount = manual_invested_amount
-            future_tracked_invested = 0.0
-            
-            for item in dates_info:
-                d_str = item["date"]
-                status = item["status"]  # ASSUMED_PAID for past, PENDING for current month
+            if sip_mode == "detailed" and detailed_installments:
+                # DETAILED MODE: Use pre-populated installments from CAS or manual entry
+                # All detailed installments are already PAID with known units
+                # CAS amounts ARE the invested amounts (stamp duty is implicit, units adjusted)
+                total_detailed_invested = 0.0
+                total_detailed_units = 0.0
                 
-                # Status is already set correctly by generate_installment_dates
+                for inst_data in detailed_installments:
+                    inst = SIPInstallment(
+                        date=inst_data["date"],
+                        amount=inst_data["amount"],
+                        units=inst_data.get("units"),
+                        nav=inst_data.get("nav"),
+                        status="PAID",  # All detailed installments are confirmed
+                        allocation_status="CONFIRMED" if inst_data.get("units") else "PENDING_NAV",
+                        is_estimated=False  # From CAS/manual = confirmed data
+                    )
+                    sip_installments.append(inst)
+                    
+                    # Sum raw CAS amounts (stamp duty is implicit, already reflected in units)
+                    total_detailed_invested += float(inst_data["amount"])
+                    
+                    if inst_data.get("units"):
+                        total_detailed_units += float(inst_data["units"])
                 
-                inst = SIPInstallment(
-                    date=d_str,
-                    amount=sip_amount,
-                    status=status
-                )
-                sip_installments.append(inst)
-            
-            # Total invested = CAS amount + app-tracked (0 on initial upload)
-            final_invested_amount = manual_invested_amount + future_tracked_invested
+                # For detailed mode: 
+                # - manual_invested_amount = 0 (all is in detailed installments)
+                # - future_sip_units = total from detailed installments
+                # - manual_total_units = total from detailed installments (for P&L calc)
+                
+                # Use CAS's exact cost_value if provided (most accurate - includes stamp duty)
+                # Otherwise use sum of raw transaction amounts
+                if cas_cost_value is not None and cas_cost_value > 0:
+                    final_invested_amount = round(cas_cost_value, 2)
+                else:
+                    final_invested_amount = round(total_detailed_invested, 2)  # Calculated with stamp duty
+                
+                future_sip_units = total_detailed_units
+                manual_total_units = total_detailed_units  # Override with actual units
+                manual_invested_amount = 0.0  # All tracked via detailed installments
+                
+            else:
+                # SIMPLE MODE: Generate Installments from dates (existing logic)
+                has_manual = manual_invested_amount > 0
+                dates_info = HoldingsService.generate_installment_dates(invested_date, sip_day, has_manual_amount=has_manual)
+                
+                # For SIP: invested_amount = manual (CAS) + future app-tracked
+                # On initial upload, future_tracked = 0, so invested_amount = manual_invested_amount
+                future_tracked_invested = 0.0
+                
+                for item in dates_info:
+                    d_str = item["date"]
+                    status = item["status"]  # ASSUMED_PAID for past, PENDING for current month
+                    
+                    inst = SIPInstallment(
+                        date=d_str,
+                        amount=sip_amount,
+                        status=status
+                    )
+                    sip_installments.append(inst)
+                
+                # Total invested = CAS amount + app-tracked (0 on initial upload)
+                final_invested_amount = manual_invested_amount + future_tracked_invested
 
         doc_data = {
             "fund_name": fund_name,
@@ -598,6 +642,7 @@ class HoldingsService:
             
             # SIP Fields
             "investment_type": investment_type,
+            "sip_mode": sip_mode if investment_type == "sip" else "simple",
             "sip_amount": sip_amount,
             "sip_start_date": invested_date if investment_type == "sip" else None,
             "sip_frequency": "Monthly",

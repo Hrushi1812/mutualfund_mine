@@ -737,6 +737,33 @@ class NavService:
             # Check if any units are estimated
             has_estimated_units = future_units > 0  # future_sip_units are always estimated
             
+            # Recalculate investment with stamp duty from installments
+            # This ensures accurate display even for old data
+            sip_mode = doc.get("sip_mode", "simple")
+            installments = doc.get("sip_installments", [])
+            
+            if sip_mode == "detailed" and installments:
+                # For detailed mode: use stored invested_amount (includes CAS cost_value)
+                # Just sum units from installments for current value calculation
+                total_units_from_installments = 0.0
+                
+                for inst in installments:
+                    if inst.get("status") in ("PAID", "ASSUMED_PAID"):
+                        # Sum units from installments (CAS provides actual units)
+                        inst_units = inst.get("units")
+                        if inst_units is not None:
+                            total_units_from_installments += float(inst_units)
+                
+                # Use stored invested_amount (already includes CAS cost_value or calculated stamp duty)
+                investment = float(doc.get("invested_amount", 0) or 0)
+                
+                # Use units from installments if available (more accurate than stored totals)
+                if total_units_from_installments > 0:
+                    units = total_units_from_installments
+            else:
+                # Simple mode: use stored invested_amount + manual_invested_amount
+                investment = float(doc.get("invested_amount", 0) or 0)
+            
             # Average NAV = Total Invested / Total Units
             if units > 0:
                 purchase_nav = investment / units

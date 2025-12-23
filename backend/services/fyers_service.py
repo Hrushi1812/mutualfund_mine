@@ -358,7 +358,7 @@ class FyersService:
             data = {
                 "symbol": formatted_symbol,
                 "resolution": resolution,
-                "date_format": "1",  # 1 = epoch, 0 = yyyy-mm-dd
+                "date_format": "0",  # 0 = epoch timestamps (int), 1 = YYYY-MM-DD strings
                 "range_from": int(from_date.timestamp()),
                 "range_to": int(to_date.timestamp()),
                 "cont_flag": "1"
@@ -476,7 +476,7 @@ class FyersService:
             data = {
                 "symbol": formatted_symbol,
                 "resolution": resolution,
-                "date_format": "1",
+                "date_format": "0",  # 0 = epoch timestamps (int), 1 = YYYY-MM-DD strings
                 "range_from": int(from_date.timestamp()),
                 "range_to": int(to_date.timestamp()),
                 "cont_flag": "1"
